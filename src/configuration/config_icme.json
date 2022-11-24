@@ -1,0 +1,54 @@
+{
+
+    "arch": {
+    "model": "icme2023-factorized",
+    "name": "icme2023-factorized",
+    "N":128,
+    "M":192
+        },
+
+
+        "dataset": {
+            "name":"vimeo",
+            "train_dataset":"/scratch/dataset/vimeo_triplet/sequences",
+            "train_arod":"/scratch/dataset/JPG-AROD",
+            "test_dataset":"/scratch/dataset/kodak",
+            "validation_split": 0.00,
+            "image_size":256,
+            "file_txt":"/scratch/dataset/vimeo_triplet/tri_trainlist.txt",
+            "bs":32,
+            "tbs": 1 
+            },
+    
+
+    "cfg": {
+        "n-gpu":1,
+        "num_workers":4,
+        "device":"cuda",
+        "seed":42,
+
+
+
+
+        "trainer": {
+            "epochs":800,
+            "metric":"mse",
+            "lambda": 0.0018,
+            "lr":1e-4,
+            "aux_lr": 1e-3,           
+            "mode": "factorized",
+            "clip_max_norm":1.0
+
+            }
+        },
+
+        "saving": {
+            "save":true,
+            "filename":"/scratch/icme_",
+            "suffix": ".pth.tar",
+            "checkpoint": false,
+            "checkpoint_path":"/scratch/pretrained_models",
+            "name":"1019_ns14.pth.tar"
+        }
+    
+}

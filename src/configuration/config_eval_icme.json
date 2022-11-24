@@ -1,0 +1,45 @@
+
+{
+    "basepath": "/Users/albertopresta/Desktop/hemp/modelli_compressione/factorized",
+    "list_models": [
+        "bmshj2018-factorized",
+        "bmshj2018-factorized",
+        "bmshj2018-factorized",
+        "bmshj2018-factorized",
+        "icme2023-factorized"
+
+        
+    ],
+    "model_name": [
+        "bmshj2018-pretrained_1",
+        "bmshj2018-pretrained_2",
+        "bmshj2018-pretrained_3",
+        "bmshj2018-pretrained_4",
+        "icme-1"
+
+
+
+],
+    "model_path": [ 
+        "1808_basemodel_0.0018_best.pth.tar",
+        "1808_basemodel_2_best.pth.tar", 
+        "1808_basemodel_0.0067_best.pth.tar",
+        "1808_basemodel_4_best.pth.tar",
+        "icme_prova.pth.tar"
+
+
+ 
+
+        
+
+    ],
+    "inputs_distribution": false,           
+    "save_rec": "recostruction.png",
+    "save_met": "metrics.png",
+    "test_path": "/Users/albertopresta/Desktop/hemp/kodak",
+    "device":"cpu",
+    "entropy_estimation":true,
+    "save_path_nn": ["/Users/albertopresta/Desktop/hemp/images/bottleneck/image_model.png","/Users/albertopresta/Desktop/hemp/images/bottleneck/metrics_model.png","/Users/albertopresta/Desktop/hemp/images/bottleneck/metrics_comp.png"],
+    "save_path_encoding": ["/Users/albertopresta/Desktop/hemp/images/entropycode/image_model.png","/Users/albertopresta/Desktop/hemp/images/entropycode/metrics_model.png","/Users/albertopresta/Desktop/hemp/images/entropycode/metrics_comp.png"],
+    "save_path": "/Users/albertopresta/Desktop/hemp/images/ufwr_latent_space/"
+}

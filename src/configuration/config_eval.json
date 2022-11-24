@@ -1,0 +1,73 @@
+
+{
+    "basepath": "/Users/albertopresta/Desktop/hemp/modelli_compressione/factorized",
+    "list_models": [
+        "bmshj2018-factorized",
+        "bmshj2018-factorized",
+        "bmshj2018-factorized",
+        "bmshj2018-factorized",
+        "bmshj2018-factorized-sos",
+        "bmshj2018-factorized-sos",
+        "bmshj2018-factorized-sos",
+        "bmshj2018-factorized-sos",
+        "bmshj2018-factorized-sos",
+        "bmshj2018-factorized-sot",
+        "bmshj2018-factorized-sot",
+        "bmshj2018-factorized-sot",
+        "bmshj2018-factorized-sot",
+        "bmshj2018-factorized-sot",
+        "bmshj2018-factorized-sot",
+        "bmshj2018-factorized-sot"
+
+        
+    ],
+    "model_name": [
+        "bmshj2018-1",
+        "bmshj2018-2",
+        "bmshj2018-3",
+        "bmshj2018-4",
+        "ufwr1",
+        "ufwr2",
+        "ufwr3",
+        "ufwr4",
+        "ufwr5",
+        "adapterdsf1",
+        "adapterdsf2",
+        "adapterdsf3",
+        "adapterdsf4",
+        "adapterdsf5",
+        "adapterdsf6",
+        "adapterdsf7"
+
+],
+    "model_path": [ 
+        "1808_basemodel_0.0018_best.pth.tar",
+        "1808_basemodel_2_best.pth.tar", 
+        "1808_basemodel_0.0067_best.pth.tar",
+        "1808_basemodel_4_best.pth.tar",
+        "adaptufwr_th0_ex30_0007.pth.tar",
+        "adaptufwr_th0_ex30_0012.pth.tar",
+        "adaptufwr_th0_ex30_0018.pth.tar",
+        "adaptufwr_th0_ex30_0035.pth.tar",
+        "ufwr_th30_ex30_013.pth.tar",
+        "adapter_th0_ex30_0007.pth.tar",
+        "adapter_th0_ex30_0015.pth.tar",
+        "adapter_th0_ex30_0018.pth.tar",
+        "adapter_th0_ex30_0035.pth.tar",
+        "adapter_th0_ex30_0067.pth.tar",
+        "adapter_th0_ex30_013.pth.tar",
+        "adapter_th0_ex30_025.pth.tar"
+
+        
+
+    ],
+    "inputs_distribution": false,           
+    "save_rec": "recostruction.png",
+    "save_met": "metrics.png",
+    "test_path": "/Users/albertopresta/Desktop/hemp/kodak",
+    "device":"cpu",
+    "entropy_estimation":true,
+    "save_path_nn": ["/Users/albertopresta/Desktop/hemp/images/bottleneck/image_model.png","/Users/albertopresta/Desktop/hemp/images/bottleneck/metrics_model.png","/Users/albertopresta/Desktop/hemp/images/bottleneck/metrics_comp.png"],
+    "save_path_encoding": ["/Users/albertopresta/Desktop/hemp/images/entropycode/image_model.png","/Users/albertopresta/Desktop/hemp/images/entropycode/metrics_model.png","/Users/albertopresta/Desktop/hemp/images/entropycode/metrics_comp.png"],
+    "save_path": "/Users/albertopresta/Desktop/hemp/images/ufwr_latent_space/"
+}
