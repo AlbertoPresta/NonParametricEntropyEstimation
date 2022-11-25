@@ -3,7 +3,6 @@ import torch
 import wandb
 from pytorch_msssim import ms_ssim
 from compAi.utils.AverageMeter import AverageMeter
-from compAi.training.sos.utility import compute_psnr, compute_msssim
 import math 
 import time 
 def sec_to_hours(seconds):
@@ -96,7 +95,7 @@ def train_one_epoch( model, criterion, train_dataloader, optimizer,epoch,clip_ma
             "train_batch/bpp_batch": out_criterion["bpp_loss"].clone().detach().item(),
             "train_batch/mse":out_criterion["mse_loss"].clone().detach().item(),
             "train_batch/entropy":out_criterion["entropy"].clone().detach().item(),
-            "train_batch/power":model.entropy_bottleneck.power.clone().detach().item(),
+            "train_batch/power":model.entropy_bottleneck.power,
             "train_batch/timing_batch":time.time()- start_batch
         }
         wandb.log(wand_dict)
@@ -127,8 +126,7 @@ def test_epoch(epoch, test_dataloader, model, criterion  ):
 
     loss = AverageMeter()
     bpp_loss = AverageMeter()
-    bpp_gaussian = AverageMeter()
-    bpp_hyperprior = AverageMeter()
+
     mse_loss = AverageMeter()
     entropy_loss = AverageMeter()
     psnr = AverageMeter()
@@ -145,8 +143,6 @@ def test_epoch(epoch, test_dataloader, model, criterion  ):
             psnr.update(compute_psnr(d, out_net["x_hat"]))
             ssim.update(compute_msssim(d, out_net["x_hat"]))           
             bpp_loss.update(out_criterion["bpp_loss"].clone().detach())
-            bpp_gaussian.update(out_criterion["bpp_gauss"].clone().detach())
-            bpp_hyperprior.update(out_criterion["bpp_hype"].clone().detach())
                                 
             loss.update(out_criterion["loss"].clone().detach())
             mse_loss.update(out_criterion["mse_loss"].clone().detach())
@@ -169,8 +165,6 @@ def test_epoch(epoch, test_dataloader, model, criterion  ):
     "test":epoch,
     "test/loss": loss.avg,
     "test/bpp":bpp_loss.avg,
-    "test/bpp_gauss":bpp_gaussian.avg,
-    "test/bpp_hype":bpp_hyperprior.avg,
     "test/mse": mse_loss.avg,
     "test/entropy":entropy_loss.avg,
     "test/psnr":psnr.avg,

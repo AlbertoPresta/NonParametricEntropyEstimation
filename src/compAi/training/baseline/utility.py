@@ -157,12 +157,13 @@ def bpp_calculation(out_net, out_enc):
         size = out_net['x_hat'].size() 
         num_pixels = size[0] * size[2] * size[3]
 
-        #bpp = sum(len(s[0]) for s in out_enc["strings"]) * 8.0 / num_pixels
+        bpp = sum(len(s[0]) for s in out_enc["strings"]) * 8.0 / num_pixels
         #bpp_y = sum(len(s[0]) for s in out_enc["strings"]) * 8.0 / num_pixels
-        bpp_y = len(out_enc["strings"][0][0]) * 8.0 / num_pixels
-        bpp_z = len(out_enc["strings"][1][0]) * 8.0 / num_pixels
-        bpp = bpp_y + bpp_z
+        bpp_y = bpp #len(out_enc["strings"][0][0]) * 8.0 / num_pixels
+        bpp_z = bpp # len(out_enc["strings"][1][0]) * 8.0 / num_pixels
+        #bpp = bpp_y + bpp_z
         return bpp, bpp_y, bpp_z
+ 
     
     
     
@@ -216,19 +217,19 @@ def plot_likelihood_baseline(net, device, epoch,n = 1000, dim = 0):
     minimo = torch.min(net.entropy_bottleneck.quantiles[:,:,0]).item()
     massimo = torch.max(net.entropy_bottleneck.quantiles[:,:,2]).item()
     space = (61)/n
-    x_values = torch.arange(-30, 31, space)
+    x_values = torch.arange(-30, 31)
     sample = x_values.repeat(net.M, 1).unsqueeze(1).to(device) # [192,1,1000]
     
-    y_values = net.entropy_bottleneck._likelihood(sample)[dim, :].squeeze(0) #[1000]
+    y_values = net.entropy_bottleneck._likelihood(sample)[dim, :].squeeze(0) 
     data = [[x, y] for (x, y) in zip(x_values,y_values)]
     table = wandb.Table(data=data, columns = ["x", "p_y"])
-    wandb.log({"likelihood at dimesion " + str(dim): wandb.plot.line(table, "x", "p_y", title='likelihood function at dimension ' + str(dim))})
+    wandb.log({"model probability dix at dimension" + str(dim): wandb.plot.scatter(table, "x", "p_y", title='model probability at dimension ' + str(dim))}) 
     
     
 
 def plot_latent_space_frequency(model, test_dataloader, device,dim = 0, test = True):
         model.eval()
-        extrema = model.entropy_bottleneck.extrema
+        extrema = 30
         if test is True:
             res = torch.zeros((len(test_dataloader),2*extrema +1)).to(device)
         else:

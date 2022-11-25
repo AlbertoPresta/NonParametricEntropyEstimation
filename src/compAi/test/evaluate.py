@@ -1,10 +1,10 @@
 import torch 
 import matplotlib.pyplot as plt
-from compAi.test.utility import compute_psnr, compute_msssim, compute_bpp, inference
+#from compAi.test.utility import compute_psnr, compute_msssim, compute_bpp, inference
 from PIL import Image
 from torchvision import transforms
 import numpy as np
-from compAi.training.sos.loss import RateDistortionLoss, RateDistorsionLossWithHemp, DifferentialFSLoss, GenericRateDistortionLoss
+#from compAi.training.sos.loss import RateDistortionLoss, RateDistorsionLossWithHemp, DifferentialFSLoss, GenericRateDistortionLoss
 from compAi.training.icme.loss import EntropyDistorsionLoss
 from compAi.utils.AverageMeter import AverageMeter
 from pytorch_msssim import ms_ssim

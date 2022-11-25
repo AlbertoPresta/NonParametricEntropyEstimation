@@ -243,7 +243,7 @@ class  EntropyBottleneck(EntropyModel):
         tail_mass: float = 1e-9,
         extrema: int = 30,
         init_scale: float = 10,
-        power = 1.0,
+        power = 1,
         **kwargs: Any,
     ):
         super().__init__(*args, **kwargs)
@@ -252,9 +252,9 @@ class  EntropyBottleneck(EntropyModel):
         self.init_scale = float(init_scale)
         self.tail_mass = float(tail_mass)
         self.stat_pmf = None
-        self.power = torch.nn.Parameter(torch.ones(1))
+        self.power = power
         self.pmf = None
-        self.epsilon = 1e-4
+        self.epsilon = 1e-7
 
         self.extrema = extrema
         self.levels = torch.arange(-self.extrema, self.extrema + 1)

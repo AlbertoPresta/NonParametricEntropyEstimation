@@ -6,8 +6,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from compressai.ans import BufferedRansEncoder, RansDecoder
-from compAi.entropy_bottleneck.papers.factorized.entropy_model_hemp import EntropyBottleneckSoSHemp
-from  compAi.entropy_bottleneck.papers.factorized.entropy_models_sos import EntropyBottleneckSoS #, GaussianConditionalSoS
 import warnings
 from compressai.layers import GDN, MaskedConv2d
 from compressai.models.utils import conv, deconv

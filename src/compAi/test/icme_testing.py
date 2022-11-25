@@ -1,11 +1,10 @@
 import torch 
 from os.path import join, exists, isfile
 import matplotlib.pyplot as plt
-from compAi.test.utility import compute_psnr, compute_msssim, compute_bpp, inference
 from PIL import Image
 from torchvision import transforms
 import numpy as np
-from compAi.training.sos.loss import RateDistortionLoss, RateDistorsionLossWithHemp, DifferentialFSLoss, GenericRateDistortionLoss
+#from compAi.training.sos.loss import RateDistortionLoss, RateDistorsionLossWithHemp, DifferentialFSLoss, GenericRateDistortionLoss
 from compAi.training.icme.loss import EntropyDistorsionLoss
 from compAi.utils.AverageMeter import AverageMeter
 from pytorch_msssim import ms_ssim
@@ -90,8 +89,11 @@ def compress_and_reconstruct_single_image(model,model_name, path_images, image_n
     save_path_image = join(save_path, image_name)
     if not exists(save_path_image):
         makedirs(save_path_image)
+    
+    if not exists(join(save_path_image,"reconstruction")):
+         makedirs(join(save_path_image,"reconstruction"))
         
-    complete_save_path = join(save_path_image,model_name + "_" + "reconstruction.png")
+    complete_save_path = join(save_path_image,"reconstruction",model_name + "_" + "reconstruction.png")
         
     # create the path for the loading the image
     image_path = join(path_images,image_name)
@@ -130,9 +132,9 @@ def compress_and_reconstruct_single_image(model,model_name, path_images, image_n
     
     
     if bpp_channels is True:
-        complete_save_path = join(save_path_image,model_name + "_" + "channel_bpp.png")
+        
 
-        bpp_list, probability, samples = compute_per_channel_bpp(model, img, type_model)        
+        bpp_list, probability = compute_per_channel_bpp(model, img, type_model)        
         major_ch = [i[0] for i in sorted(enumerate(bpp_list), key=lambda x:x[1])]
         
         fig, ax = plt.subplots(figsize=(9, 6))
@@ -140,6 +142,12 @@ def compress_and_reconstruct_single_image(model,model_name, path_images, image_n
         ax.title.set_text('Per-channel bit-rate')
         ax.set_xlabel('Channel index')
         ax.set_ylabel('Channel bpp')
+        
+        if not exists(join(save_path_image,"channels_bpp")):
+            makedirs(join(save_path_image,"channels_bpp"))
+        
+        
+        complete_save_path = join(save_path_image,"channels_bpp",model_name + "_" + "channel_bpp.png")
         plt.savefig(complete_save_path)
 
 
@@ -152,7 +160,8 @@ def compress_and_reconstruct_single_image(model,model_name, path_images, image_n
                 y = model.entropy_bottleneck.quantize(y, "symbols")
         
         #extract 5 worst probability statistics  and compare with the true one
-        for i in range(5):
+        lista_js = []
+        for i in range(192):
             # extract the true probability           
                 a,b = torch.unique(y[i],return_counts=True)
                 a = a.int()
@@ -162,17 +171,21 @@ def compress_and_reconstruct_single_image(model,model_name, path_images, image_n
                 if "icme" in type_model:
                     data_dic = create_dictionary(a,b)
                 else:
-                    data_dic = create_dictionary(a,b,samples[i].detach().numpy())
+                    data_dic = create_dictionary(a,b)
                 
                 pmf = probability[i]
-                print(pmf)
                 l = int(pmf.shape[0]/2)
                 pmf_dic = dict(zip(np.arange(-l,l + 1),list(pmf.numpy())))
                 
-                pth  = join(save_path_image,model_name + "_" + str(i) + "_distribution.png") 
-                plot_distribution(data_dic,pmf_dic,i,pth)
-                        
-    return bpp, mssim_val, psnr_val
+                if not exists(join(save_path_image,"latent_space",model_name)):
+                    makedirs(join(save_path_image,"latent_space",model_name))
+                               
+                pth  = join(save_path_image,"latent_space",model_name,"channel_" + str(i) + "_distribution.png") 
+                r = plot_distribution(data_dic,pmf_dic,i,pth)
+                lista_js.append(r)
+        print(np.mean(np.array(lista_js))) 
+                      
+    return bpp, mssim_val, psnr_val, np.mean(np.array(lista_js))
         
 
 
@@ -194,14 +207,12 @@ def plot_distribution(data_dic,pmf_dic,dim,pth):
     plt.grid()
     plt.locator_params(axis='y', nbins=10)
     
-    #for i in range(len(b)):
-    #    plt.hlines(b[i],0,a[i]) # Here you are drawing the horizontal lines
-    
 
     plt.legend()
     plt.savefig(pth)
 
     plt.close()
+    return r
 
 
 
@@ -209,8 +220,7 @@ def plot_distribution(data_dic,pmf_dic,dim,pth):
 def compute_prob_distance(data_dic,pmf_dic,dim):
     data_val = list(data_dic.values())
     pmf_val = list(pmf_dic.values()) 
-
-    
+   
     r = jensenshannon(data_val,pmf_val)
     if r < 0.002:
         return 0
@@ -221,7 +231,6 @@ def compute_prob_distance(data_dic,pmf_dic,dim):
 def create_dictionary(a,b):
     
     t = dict(zip(a.tolist(),b.tolist()))
-    print(t)
     res = {}
     levels = torch.arange(-30,31)
     for i in range(-30,31):
@@ -268,14 +277,16 @@ def from_state_dict(arch, state_dict):
     return net
 
 def load_model(path_models, name_model, type_mode, device = torch.device("cpu"), dataloader = None):
-    print("----> ",path_models)
+
     if "icme" in name_model:
         complete_path = join(path_models,name_model + ".pth.tar")
-        print(complete_path)
+        print("------------>",complete_path)
         net = load_pretrained_baseline(type_mode, complete_path, device  = device)
         net.update(device = device)
     else: # use only baseline
+        
         complete_path = join(path_models,name_model + ".pth.tar")
+        print("------------>",complete_path)
         net = load_pretrained_baseline(type_mode, complete_path, device  = device)    
         net.update()  
     return net
@@ -292,10 +303,12 @@ def plot_diagram_and_images(models_path,
     bpp_icme = []
     psnr_icme = []
     mssim_icme = []
+    jensen_icme = []
     
     bpp_baseline = []
     psnr_baseline = []
     mssim_baseline = []
+    jensen_baseline = []
     types = None
     
     for i,f in enumerate(models):
@@ -310,7 +323,7 @@ def plot_diagram_and_images(models_path,
         
         
         # compress the image
-        bpp, mssim_val, psnr_val = compress_and_reconstruct_single_image(model, 
+        bpp, mssim_val, psnr_val, js_val= compress_and_reconstruct_single_image(model, 
                                                                         model_name, 
                                                                         path_images, 
                                                                         image_name, 
@@ -321,25 +334,29 @@ def plot_diagram_and_images(models_path,
             bpp_icme.append(bpp)
             mssim_icme.append(mssim_val)
             psnr_icme.append(psnr_val)
+            jensen_icme.append(js_val)
             types = type_model
         else:
             bpp_baseline.append(bpp)
-            mssim_baseline.append(mssim_baseline)
-            psnr_baseline.append(psnr_baseline)
+            mssim_baseline.append(mssim_val)
+            psnr_baseline.append(psnr_val)
+            jensen_baseline.append(js_val)
     
     
     complete_save_path = join(save_path,image_name)
-    
+    print("psnr baseline_      ",psnr_baseline)
     
     bpp_icme = sorted(bpp_icme)
     mssim_icme = sorted(mssim_icme)
     psnr_icme = sorted(psnr_icme)
+    jensen_icme = sorted(jensen_icme)
     
     bpp_baseline = sorted(bpp_baseline)
     mssim_baseline = sorted(mssim_baseline)
     psnr_baseline = sorted(psnr_baseline)
+    jensen_baseline = sorted(jensen_baseline)
     
-    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
     plt.figtext(.5, 0., '(upper-left is better)', fontsize=12, ha='center')
    
     axes[0].plot(bpp_baseline, psnr_baseline,'-',color = 'b', label = "baseline")
@@ -365,8 +382,25 @@ def plot_diagram_and_images(models_path,
     axes[1].title.set_text('MS-SSIM (log) comparison')
     axes[1].grid()
     axes[1].legend(loc='best')
+
+
+
+    axes[2].plot(bpp_baseline, jensen_baseline,'-',color = 'b', label = "baseline")
+    axes[2].plot(bpp_baseline, jensen_baseline,'o',color = 'b')
+   
+    axes[2].plot(bpp_icme, jensen_icme,'-',color = 'r', label = "EBSF")
+    axes[2].plot(bpp_icme, jensen_icme,'o',color = 'r')
+     
+    axes[2].set_ylabel('Jensen Distance')
+    axes[2].set_xlabel('Bit-rate [bpp]')
+    axes[2].title.set_text('Average Jensen Distance over channels')
+    axes[2].grid()
+    axes[2].legend(loc='best')
     
-    cp =  join(complete_save_path, "metric_comp_" + type_model + ".png")
+    if not exists(join(complete_save_path,"metrics")):
+        makedirs(join(complete_save_path,"metrics"))
+    
+    cp =  join(complete_save_path,"metrics", "metric_comp_" + type_model + ".png")
     for ax in axes:
         ax.grid(True)
     plt.savefig(cp)
@@ -382,14 +416,14 @@ def compute_per_channel_bpp(net, x, type):
         y = net.g_a(x)
         if "icme" in type:
             y_hat, y_likelihoods, probability = net.entropy_bottleneck(y)
-            samples = None
+
         else:
             y_hat, y_likelihoods = net.entropy_bottleneck(y)
-            probability, samples = extract_pmf_from_baseline(net)
+            probability= extract_pmf_from_baseline(net)
         print(y.size(), y_likelihoods.size())
         
     channel_bpps = [torch.log(y_likelihoods[0, c]).sum().item() / (-math.log(2) * num_pixels)for c in range(y.size(1))]
-    return channel_bpps, probability, samples
+    return channel_bpps, probability
 
 
 
@@ -411,9 +445,12 @@ def extract_pmf_from_baseline(net):
 
     max_length = pmf_length.max().item()
     device = pmf_start.device
-    samples_c = torch.arange(max_length, device=device)
+    samples_c = torch.arange(-30, 31, device=device)
+    
+    samples = samples_c.repeat(192,1).unsqueeze(1)
 
-    samples = samples_c[None, :] + pmf_start[:, None, None]
+
+    #samples = samples_c[None, :] + pmf_start[:, None, None]
 
     half = float(0.5)
 
@@ -422,7 +459,12 @@ def extract_pmf_from_baseline(net):
     sign = -torch.sign(lower + upper)
     pmf = torch.abs(torch.sigmoid(sign * upper) - torch.sigmoid(sign * lower))
     pmf = pmf[:, 0, :]  
-    return pmf, samples_c
+    
+    
+    samples = samples[:,0,:]
+
+
+    return pmf
 
 
     

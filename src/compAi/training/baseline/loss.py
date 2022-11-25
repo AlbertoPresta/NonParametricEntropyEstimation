@@ -19,17 +19,11 @@ class RateDistortionLoss(nn.Module):
 
         
         
-        out["bpp_hype"] = torch.log(output["likelihoods"]["z"]).sum() / (-math.log(2) * num_pixels)
-        out["bpp_gauss"] = torch.log(output["likelihoods"]["y"]).sum() / (-math.log(2) * num_pixels)
         
-        
-        """
         out["bpp_loss"] = sum(
             (torch.log(likelihoods).sum() / (-math.log(2) * num_pixels))
-            for likelihoods in output["likelihoods"].values()
-        )
-        """
-        out["bpp_loss"] = out["bpp_hype"] + out["bpp_gauss"]
+            for likelihoods in output["likelihoods"].values())
+
         out["mse_loss"] = self.mse(output["x_hat"], target)
         out["loss"] = self.lmbda * 255**2 * out["mse_loss"] + out["bpp_loss"]
 

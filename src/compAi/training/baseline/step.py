@@ -115,8 +115,7 @@ def test_epoch(epoch, test_dataloader, model, criterion):
 
     loss = AverageMeter()
     bpp_loss = AverageMeter()
-    bpp_gauss = AverageMeter()
-    bpp_hyperprior = AverageMeter()
+
     mse_loss = AverageMeter()
     aux_loss = AverageMeter()
     psnr = AverageMeter()
@@ -135,8 +134,7 @@ def test_epoch(epoch, test_dataloader, model, criterion):
 
             aux_loss.update(model.aux_loss())
             bpp_loss.update(out_criterion["bpp_loss"])
-            bpp_gauss.update(out_criterion["bpp_gauss"])
-            bpp_hyperprior.update(out_criterion["bpp_hype"])
+
             loss.update(out_criterion["loss"])
             mse_loss.update(out_criterion["mse_loss"])
 
@@ -152,8 +150,6 @@ def test_epoch(epoch, test_dataloader, model, criterion):
     "test":epoch,
     "test/loss": loss.avg,
     "test/bpp":bpp_loss.avg,
-    "test/bpp_gauss": bpp_gauss.avg,
-    "test/bpp_hype":bpp_hyperprior.avg,
     "test/mse": mse_loss.avg, 
     "test/psnr":psnr.avg,
     "test/ssim":ssim.avg

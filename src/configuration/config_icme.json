@@ -33,7 +33,7 @@
         "trainer": {
             "epochs":800,
             "metric":"mse",
-            "lambda": 0.0018,
+            "lambda": 0.00045,
             "lr":1e-4,
             "aux_lr": 1e-3,           
             "mode": "factorized",

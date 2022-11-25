@@ -10,7 +10,7 @@ from compAi.test.evaluate import *
 from Datasets.dataset import Datasets, TestKodakDataset
 from torch.utils.data import DataLoader
 from compAi.test.icme_testing import * 
-from compAi.training.sos.loss import RateDistortionLoss
+
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -48,7 +48,7 @@ def main(config):
 
     import pandas as  pd
     import os
-    print(os.listdir("/Users/albertopresta/Desktop/hemp/files/")) 
+    #print(os.listdir("/Users/albertopresta/Desktop/hemp/files/")) 
     
     print("-------------------   ENTROPY ESTIMATION STARTING   -------------------")
     #indice = 22
@@ -86,12 +86,16 @@ def main(config):
 
     #print(icme_bpp," ",icme_psnr," ",icme_mssim)
     """
-    save_path =  "/Users/albertopresta/Desktop/hemp/results/icme/factorized/kodak"
-    path_images =  "/Users/albertopresta/Desktop/hemp/kodak"
-    models_path = "/Users/albertopresta/Desktop/hemp/models/factorized/icme"
+    save_path =  "/Users/albertopresta/Desktop/icme/results/icme/factorized/kodak"
+    path_images =  "/Users/albertopresta/Desktop/icme/kodak"
+    models_path = "/Users/albertopresta/Desktop/icme/models/factorized/icme"
     image_name = "kodim01.png"
     
-    plot_diagram_and_images(models_path, save_path, path_images, image_name)
+    
+    lista_immagini = os.listdir(path_images)
+    for f in lista_immagini:
+        print("--------------------- ",f,"  ----------------------------")
+        plot_diagram_and_images(models_path, save_path, path_images, f)
     
     
     

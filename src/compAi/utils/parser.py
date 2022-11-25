@@ -1,7 +1,6 @@
 import argparse
 from compressai.models import *
 from compressai.zoo import *
-from compAi.zoo.image import bmshj2018_factorized_sos
 
 import os
 import logging
@@ -37,14 +36,6 @@ def write_json(content, fname):
 
 
 
-image_models = {
-    "bmshj2018-factorized-sos": bmshj2018_factorized_sos,
-    "bmshj2018-hyperprior": bmshj2018_hyperprior,
-    "mbt2018-mean": mbt2018_mean,
-    "mbt2018": mbt2018,
-    "cheng2020-anchor": cheng2020_anchor,
-    "cheng2020-attn": cheng2020_attn,
-}
 
 
 

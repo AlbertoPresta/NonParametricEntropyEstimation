@@ -9,4 +9,4 @@ parameters:
   quality: 
     values: [1]
   lambda:
-    values: [0.0009, 0.0018, 0.0027, 0.0070, 0.013, 0.025]
+    values: [0.0009, 0.00045, 0.013, 0.025]

@@ -12,7 +12,7 @@ import wandb
 import time
 from compAi.training.baseline.loss import RateDistortionLoss
 from compAi.training.baseline.step  import train_one_epoch, test_epoch
-from compAi.training.baseline.utility import compress_with_ac, AverageMeter, CustomDataParallel, configure_optimizers, save_checkpoint, plot_quantized_pmf, plot_likelihood_baseline
+from compAi.training.baseline.utility import plot_latent_space_frequency,compress_with_ac, AverageMeter, CustomDataParallel, configure_optimizers, save_checkpoint, plot_quantized_pmf, plot_likelihood_baseline
 
 from compAi.utils.parser import parse_args, ConfigParser
 import collections
@@ -155,13 +155,22 @@ def main(config):
             
         
         # plot sos curve 
-        if epoch%2==0:
-            plot_likelihood_baseline(net, device, epoch)
-            compress_with_ac(net, test_dataloader, device,epoch)
+        if epoch%10==0 :
+            for ii in [0,1,2,3,55,191,127,160,172,68,100,91,87,90,88,23,10]:
+                plot_likelihood_baseline(net, device, epoch, dim = ii)
+                plot_latent_space_frequency(net, test_dataloader, device,dim = ii, test = True)
+
+        
+        
+        #compress_with_ac(net, test_dataloader, device,epoch)
             #plot_quantized_pmf(net, device, epoch)
 
         end = time.time()
         print("Runtime of the epoch " + str(epoch) + " is: ", end - start)
+        
+    for ii in range(191):
+        plot_likelihood_baseline(net, device, epoch, dim = ii)
+        plot_latent_space_frequency(model, test_dataloader, device,dim = ii, test = True)
 
 if __name__ == "__main__":
     args = argparse.ArgumentParser(description='PyTorch Template')

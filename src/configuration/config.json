@@ -4,20 +4,20 @@
 {
 
     "arch": {
-    "model":"mbt2018-mean",
-    "name":"mbt2018-mean",
+    "model":"bmshj2018-factorized",
+    "name":"bmshj2018-factorized",
     "quality":1
         },
 
 
         "dataset": {
             "name":"vimeo",
-            "train_dataset":"/scratch/dataset/vimeo_triplet/sequences",
+            "train_dataset":"/data/training",
             "train_arod":"/scratch/dataset/JPG-AROD",
-            "test_dataset":"/scratch/dataset/kodak",
+            "test_dataset":"/data/test",
             "validation_split": 0.00,
             "image_size":256,
-            "file_txt":"/scratch/dataset/vimeo_triplet/tri_trainlist.txt",
+            "file_txt":"/data/training/tri_trainlist.txt",
             "bs":32,
             "tbs": 1 
             },
@@ -35,7 +35,7 @@
         "trainer": {
             "epochs":800,
             "metric":"mse",
-            "lambda": 0.0018,
+            "lambda": 0.0009,
             "lr":1e-4,
             "aux_lr": 1e-3,
             
@@ -45,7 +45,7 @@
         },
         "saving": {
             "save":true,
-            "filename":"/scratch/new_models",
+            "filename":"/src/results/compressai",
             "suffix": ".pth.tar",
             "checkpoint": false,
             "checkpoint_path":"/scratch/pretrained_models",
