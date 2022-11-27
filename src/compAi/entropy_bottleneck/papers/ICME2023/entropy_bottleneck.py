@@ -241,7 +241,7 @@ class  EntropyBottleneck(EntropyModel):
         channels: int,
         *args: Any,
         tail_mass: float = 1e-9,
-        extrema: int = 30,
+        extrema: int = 60,
         init_scale: float = 10,
         power = 1,
         **kwargs: Any,

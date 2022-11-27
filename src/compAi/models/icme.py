@@ -29,11 +29,11 @@ class CompressionModel(nn.Module):
             bottleneck
     """
 
-    def __init__(self, entropy_bottleneck_channels = 192, extrema = 30):
+    def __init__(self, entropy_bottleneck_channels = 192, extrema = 30, power = 1):
         super().__init__()
         
         
-        self.entropy_bottleneck = EntropyBottleneck(entropy_bottleneck_channels, extrema = extrema)
+        self.entropy_bottleneck = EntropyBottleneck(entropy_bottleneck_channels, extrema = extrema, power = power)
 
 
     def aux_loss(self):
@@ -82,8 +82,8 @@ class CompressionModel(nn.Module):
 
 
 class FactorizedICME(CompressionModel):
-    def __init__(self, N, M,extrema = 30, **kwargs):
-        super().__init__(entropy_bottleneck_channels = M,extrema = extrema, **kwargs)
+    def __init__(self, N, M,extrema = 30,power = 1.0, **kwargs):
+        super().__init__(entropy_bottleneck_channels = M,extrema = extrema, power = power, **kwargs)
 
         self.g_a = nn.Sequential(
             conv(3, N),

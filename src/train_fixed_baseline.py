@@ -12,7 +12,7 @@ import wandb
 import time
 from compAi.training.baseline.loss import RateDistortionLoss
 from compAi.training.baseline.step  import train_one_epoch, test_epoch
-from compAi.training.baseline.utility import plot_latent_space_frequency,compress_with_ac, AverageMeter, CustomDataParallel, configure_optimizers, save_checkpoint, plot_quantized_pmf, plot_likelihood_baseline
+from compAi.training.baseline.utility import reinitialize_entropy_model, freeze_autoencoder, plot_latent_space_frequency,compress_with_ac, AverageMeter, CustomDataParallel, configure_optimizers, save_checkpoint, plot_quantized_pmf, plot_likelihood_baseline
 
 from compAi.utils.parser import parse_args, ConfigParser
 import collections
@@ -31,11 +31,8 @@ image_models = {
 
 
 
-
-
-
 def main(config):
-
+    
     wandb.define_metric("test/*", step_metric="test")
     wandb.define_metric("train/*", step_metric="train")
     wandb.define_metric("train_batch/*", step_metric="train_batch")
@@ -80,12 +77,10 @@ def main(config):
         pin_memory=True,
     )
 
-    net = image_models[config["arch"]["model"]](quality = config["arch"]["quality"])
 
+    net = image_models[config["arch"]["model"]](quality = config["arch"]["quality"])
     net = net.to(device)
 
-    if device == "cuda" and torch.cuda.device_count() > 1:
-        net = CustomDataParallel(net)
 
     optimizer, aux_optimizer = configure_optimizers(net, config)
     lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min", patience = 20, factor = 0.5)
@@ -94,16 +89,42 @@ def main(config):
 
     clip_max_norm = config["cfg"]["trainer"]["clip_max_norm"]
     last_epoch = 0
-    if config["saving"]["checkpoint"]:  # load from previous checkpoint
-        checkpoint = torch.load(config["checkpoint_path"], map_location=device)
-        last_epoch = checkpoint["epoch"] + 1
-        net.load_state_dict(checkpoint["state_dict"])
-        optimizer.load_state_dict(checkpoint["optimizer"])
-        aux_optimizer.load_state_dict(checkpoint["aux_optimizer"])
-        lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
+
+
+
+
+
+    if device == "cuda" and torch.cuda.device_count() > 1:
+        net = CustomDataParallel(net)
+
+
+
+
+    checkpoint = torch.load(config["saving"]["checkpoint_path"], map_location=device)
+    last_epoch = checkpoint["epoch"] + 1
+    net.load_state_dict(checkpoint["state_dict"])
+    #optimizer.load_state_dict(checkpoint["optimizer"])
+    aux_optimizer.load_state_dict(checkpoint["aux_optimizer"])
+    #lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
+    
+    
+    # reinizializzare la rete centrale 
+    reinitialize_entropy_model(net)
+    
+    # freeze of the encoder and decodestring()
+    freeze_autoencoder(net)
+    
+    epoch = 0
     counter = 0
     best_loss = float("inf")
     for epoch in range(last_epoch, config["cfg"]["trainer"]["epochs"]):
+        
+        model_tr_parameters = sum(p.numel() for p in net.parameters() if p.requires_grad)
+        model_fr_parameters = sum(p.numel() for p in net.parameters() if p.requires_grad== False)
+                   
+        print("epoch ", epoch, " trainable parameters: ",model_tr_parameters)
+        print("epoch ",epoch," freeze parameters: ", model_fr_parameters)
+        
         start = time.time()
         print(f"Learning rate: {optimizer.param_groups[0]['lr']}")
         counter = train_one_epoch(
@@ -125,6 +146,7 @@ def main(config):
                           net, 
                           criterion)
         lr_scheduler.step(loss)
+
 
         is_best = loss < best_loss
         best_loss = min(loss, best_loss)
@@ -192,9 +214,7 @@ if __name__ == "__main__":
 
     ]
     
-    wandb.init(project="analysis_latentspace", entity="albertopresta")
+    wandb.init(project="analysis_latentspace_pretrained", entity="albertopresta")
     config = ConfigParser.from_args(args, wandb.run.name, options)
     wandb.config.update(config._config)
     main(config)
-    
-    

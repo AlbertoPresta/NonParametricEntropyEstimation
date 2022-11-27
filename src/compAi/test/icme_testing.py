@@ -17,6 +17,9 @@ from compAi.models.icme import FactorizedICME, ICMEScaleHyperprior, ICMEMeanScal
 from os import makedirs
 from compressai.zoo import *
 from scipy.spatial.distance import jensenshannon
+import math
+
+
 
 model_architectures= {
     "bmshj2018-factorized": bmshj2018_factorized,
@@ -25,6 +28,211 @@ model_architectures= {
     "icme2023-meanscalehyperprior": ICMEMeanScaleHyperprior
 
 }
+
+
+def bpp_calculation(out_net, out_enc):
+        size = out_net['x_hat'].size() 
+        num_pixels = size[0] * size[2] * size[3]
+        bpp = sum(len(s[0]) for s in out_enc["strings"]) * 8.0 / num_pixels
+        return bpp
+
+
+def compute_psnr(a, b):
+    mse = torch.mean((a - b)**2).item()
+    return -10 * math.log10(mse)
+
+
+def compute_msssim(a, b):
+    return ms_ssim(a, b, data_range=1.).item()
+
+
+
+
+
+def extract_results_on_entire_kodak(models_path,
+                                    save_path,  
+                                    dataloader,
+                                    device = torch.device("cpu")):
+
+    models = listdir(models_path)
+
+    bpp_icme = []
+    psnr_icme = []
+    mssim_icme = []
+    jensen_icme = []
+    
+    bpp_baseline = []
+    psnr_baseline = []
+    mssim_baseline = []
+    jensen_baseline = []
+    types = None
+    
+    for i,f in enumerate(models):
+        if "DS_Store" in f:
+            continue
+
+        path_models = join(models_path,f)
+        type_model = f.split("_")[0] #factorizedICME
+        model_name = f.split(".")[0] #factorizedICME_0018
+        model = load_model(models_path, model_name, type_model, device = device)
+        
+        #ora abbiamo il modello
+        print("inizio modello ",f)
+        bpp, psnr, mssim, js_distance = inference_with_arithmetic_codec(model, dataloader, device,  type_model)
+        
+        if "icme" in type_model:
+            bpp_icme.append(bpp)
+            psnr_icme.append(psnr)
+            mssim_icme.append(mssim)
+            jensen_icme.append(js_distance)
+        else:
+            bpp_baseline.append(bpp)
+            psnr_baseline.append(psnr)
+            mssim_baseline.append(mssim)
+            jensen_baseline.append(js_distance)
+        print("fine modello ",f)
+    
+    # ora abbiamo le lista si deve plottare    
+    bpp_icme = sorted(bpp_icme)
+    mssim_icme = sorted(mssim_icme)
+    psnr_icme = sorted(psnr_icme)
+    jensen_icme = sorted(jensen_icme)
+    
+    bpp_baseline = sorted(bpp_baseline)
+    mssim_baseline = sorted(mssim_baseline)
+    psnr_baseline = sorted(psnr_baseline)
+    jensen_baseline = sorted(jensen_baseline)
+    
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    #plt.figtext(.5, 0., '()', fontsize=12, ha='center')
+   
+    axes[0].plot(bpp_baseline, psnr_baseline,'-',color = 'b', label = "baseline")
+    axes[0].plot(bpp_baseline, psnr_baseline,'o',color = 'b')
+
+    axes[0].plot(bpp_icme, psnr_icme,'-',color = 'r', label = "EBSF")
+    axes[0].plot(bpp_icme, psnr_icme,'o',color = 'r')
+    
+    axes[0].set_ylabel('PSNR [dB]')
+    axes[0].set_xlabel('Bit-rate [bpp]')
+    axes[0].title.set_text('PSNR comparison')
+    axes[0].grid()
+    axes[0].legend(loc='best')
+        
+    axes[1].plot(bpp_baseline, mssim_baseline,'-',color = 'b', label = "baseline")
+    axes[1].plot(bpp_baseline, mssim_baseline,'o',color = 'b')
+   
+    axes[1].plot(bpp_icme, mssim_icme,'-',color = 'r', label = "EBSF")
+    axes[1].plot(bpp_icme, mssim_icme,'o',color = 'r')
+     
+    axes[1].set_ylabel('MS-SSIM [dB]')
+    axes[1].set_xlabel('Bit-rate [bpp]')
+    axes[1].title.set_text('MS-SSIM (log) comparison')
+    axes[1].grid()
+    axes[1].legend(loc='best')
+
+
+
+    axes[2].plot(bpp_baseline, jensen_baseline,'-',color = 'b', label = "baseline")
+    axes[2].plot(bpp_baseline, jensen_baseline,'o',color = 'b')
+   
+    axes[2].plot(bpp_icme, jensen_icme,'-',color = 'r', label = "EBSF")
+    axes[2].plot(bpp_icme, jensen_icme,'o',color = 'r')
+     
+    axes[2].set_ylabel('Jensen Distance')
+    axes[2].set_xlabel('Bit-rate [bpp]')
+    axes[2].title.set_text('Average Jensen Distance over channels')
+    axes[2].grid()
+    axes[2].legend(loc='best')
+    
+    #if not exists(join(save_path,"metrics")):
+    #    makedirs(join(save_path,"metrics"))
+    
+    cp =  join(save_path, "metric_comp_" + type_model + ".png")
+    for ax in axes:
+        ax.grid(True)
+    plt.savefig(cp)
+    plt.close()                        
+        
+    
+        
+
+
+
+
+
+
+def inference_with_arithmetic_codec(model, test_dataloader, device,  type_model):
+    
+    bpp_loss = AverageMeter()
+    psnr = AverageMeter()
+    mssim = AverageMeter()
+    timing_all = AverageMeter()
+    timing_enc = AverageMeter()
+    timing_dec = AverageMeter()
+    js_distance = AverageMeter()
+    start = time.time()  
+    
+    
+    with torch.no_grad():
+        for i,d in enumerate(test_dataloader): 
+                        
+            d = d.to(device) 
+            start_all = time.time()
+            
+            bpp_list, probability = compute_per_channel_bpp(model, d, type_model)  
+            if "icme" not in type_model:  
+                out_enc = model.compress(d) # bit_stream is the compressed, output_cdf needs for decoding 
+                enc_comp = time.time() - start_all
+                timing_enc.update(enc_comp)
+                start = time.time()  
+                out_dec = model.decompress(out_enc["strings"], out_enc["shape"])
+                timing_dec.update(time.time() - start)
+                timing_all.update(time.time() - start_all)
+            else:
+                out_enc = model.compress_during_training(d, device = device) # bit_stream is the compressed, output_cdf needs for decoding 
+                enc_comp = time.time() - start_all
+                timing_enc.update(enc_comp)
+                start = time.time()  
+                out_dec = model.decompress_during_training(out_enc["strings"], out_enc["shape"])
+                timing_dec.update(time.time() - start)
+                timing_all.update(time.time() - start_all)               
+
+            bpp= bpp_calculation(out_dec, out_enc)
+            bpp_loss.update(bpp)
+            psnr.update(compute_psnr(d, out_dec["x_hat"]))
+            mssim.update(compute_msssim(d, out_dec["x_hat"]))  
+            
+            # inizio a calcolare la distanza di Jensen media su tutto il dataset kodak 
+            y = model.g_a(d)
+            y = y.squeeze(0)
+            if "icme" in type_model:
+                y = model.entropy_bottleneck.quantize(y, False)
+            else:
+                y = model.entropy_bottleneck.quantize(y, "symbols")
+            lista_js = []
+            for j in range(192):
+                # extract the true probability           
+                    a,b = torch.unique(y[j],return_counts=True)
+                    a = a.int()
+                    somma = torch.sum(b).item()
+                    b = (b/somma)
+                
+                    if "icme" in type_model:
+                        data_dic = create_dictionary(a,b)
+                    else:
+                        data_dic = create_dictionary(a,b)
+                
+                    pmf = probability[j]
+                    l = int(pmf.shape[0]/2)
+                    pmf_dic = dict(zip(np.arange(-l,l + 1),list(pmf.numpy())))
+                
+                    r =  compute_prob_distance(data_dic,pmf_dic,j)
+                    lista_js.append(r)
+            js_distance.update(np.mean(np.array(lista_js))) 
+                
+    return bpp_loss.avg, psnr.avg, mssim.avg, js_distance.avg 
+    
+
 
 def find_closest_bpp(target, img, fmt='jpeg'):
     lower = 0
@@ -57,19 +265,16 @@ def pillow_encode(img, fmt='jpeg', quality=10):
 
 
 
+######################################################################################
+######################################################################################
+######################################################################################
+######################################################################################
+################### SINGLE IMAGE TESTING         #####################################
+######################################################################################
+######################################################################################
+######################################################################################
+######################################################################################
 
-
-
-def bpp_calculation(out_net, out_enc):
-        size = out_net['x_hat'].size() 
-        num_pixels = size[0] * size[2] * size[3]
-
-        bpp = sum(len(s[0]) for s in out_enc["strings"]) * 8.0 / num_pixels
-        #bpp_y = sum(len(s[0]) for s in out_enc["strings"]) * 8.0 / num_pixels
-        #bpp_y = bpp #len(out_enc["strings"][0][0]) * 8.0 / num_pixels
-        #bpp_z = bpp # len(out_enc["strings"][1][0]) * 8.0 / num_pixels
-        #bpp = bpp_y + bpp_z
-        return bpp
 
 def compress_and_reconstruct_single_image(model,model_name, path_images, image_name,save_path, type_model, bpp_channels = True):
     """
@@ -276,17 +481,15 @@ def from_state_dict(arch, state_dict):
     net.load_state_dict(state_dict)
     return net
 
-def load_model(path_models, name_model, type_mode, device = torch.device("cpu"), dataloader = None):
+def load_model(path_models, name_model, type_mode, device = torch.device("cpu")):
 
     if "icme" in name_model:
         complete_path = join(path_models,name_model + ".pth.tar")
-        print("------------>",complete_path)
         net = load_pretrained_baseline(type_mode, complete_path, device  = device)
         net.update(device = device)
     else: # use only baseline
         
         complete_path = join(path_models,name_model + ".pth.tar")
-        print("------------>",complete_path)
         net = load_pretrained_baseline(type_mode, complete_path, device  = device)    
         net.update()  
     return net
@@ -319,7 +522,7 @@ def plot_diagram_and_images(models_path,
 
         type_model = f.split("_")[0] #factorizedICME
         model_name = f.split(".")[0] #factorizedICME_0018
-        model = load_model(models_path, model_name, type_model, device = device, dataloader=dataloader)
+        model = load_model(models_path, model_name, type_model, device = device)
         
         
         # compress the image
@@ -420,7 +623,6 @@ def compute_per_channel_bpp(net, x, type):
         else:
             y_hat, y_likelihoods = net.entropy_bottleneck(y)
             probability= extract_pmf_from_baseline(net)
-        print(y.size(), y_likelihoods.size())
         
     channel_bpps = [torch.log(y_likelihoods[0, c]).sum().item() / (-math.log(2) * num_pixels)for c in range(y.size(1))]
     return channel_bpps, probability

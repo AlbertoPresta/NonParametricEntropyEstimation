@@ -86,6 +86,7 @@ def main(config):
     N = config["arch"]["N"]
     M = config["arch"]["M"]
     lmbda = config["cfg"]["trainer"]["lambda"]
+    power = config["cfg"]["trainer"]["power"]
     mode = config["cfg"]["trainer"]["mode"]
     
     if model_name in "icme2023-factorized" and mode != "factorized":
@@ -93,7 +94,7 @@ def main(config):
     if "hype" in model_name and mode != "hyperprior":
         raise ValueError(f'check loss function')
     
-    net = image_models[model_name](N,M)
+    net = image_models[model_name](N,M, power = power)
 
     net = net.to(device)
     print("POWER: ",net.entropy_bottleneck.power)
@@ -212,6 +213,11 @@ def main(config):
         # plot sos curve 
 
             #plot_likelihood_baseline(net, device, epoch)
+        if epoch%1==0:
+            for ii in [2]:
+                #(net, device, epoch,dim = ii)
+                res_test = plot_latent_space_frequency(net, test_dataloader, device,epoch,dim = ii, test = True)
+            """
             if epoch%10==0 :
                 for ii in [0,1,2,3,55,191,127,160,172,68,100,91,87,90,88,23,10]:
                     if config["arch"]["model"] == "icme2023-factorized":
@@ -221,7 +227,7 @@ def main(config):
                         res_test = plot_hyperprior_latent_space_frequency(net, test_dataloader, device,dim = ii, test = True)
                         res_train = plot_hyperprior_latent_space_frequency(net, train_dataloader_plot, device,dim = ii, test = False)   
                              
-
+            """
 
 
         """
@@ -240,6 +246,8 @@ def main(config):
         else:
             res_test = plot_hyperprior_latent_space_frequency(net, test_dataloader, device,dim = ii, test = True)
             res_train = plot_hyperprior_latent_space_frequency(net, train_dataloader_plot, device,dim = ii, test = False)   
+
+
 if __name__ == "__main__":
     args = argparse.ArgumentParser(description='PyTorch Template')
     args.add_argument('-c', '--config', default="configuration/config_icme.json", type=str,
@@ -254,13 +262,13 @@ if __name__ == "__main__":
     CustomArgs = collections.namedtuple('CustomArgs', 'flags type target')
     options = [
         CustomArgs(['--ql', '--quality'], type=int, target='arch;quality'),
-         CustomArgs(['--lmb', '--lambda'], type=float, target='cfg;trainer;lambda')
-        
+         CustomArgs(['--lmb', '--lambda'], type=float, target='cfg;trainer;lambda'),
+        CustomArgs(['--pw', '--power'], type=float, target='cfg;trainer;power')
 
 
     ]
     
-    wandb.init(project="prova_icme", entity="albertopresta")
+    wandb.init(project="analysis_latentspace", entity="albertopresta")
     config = ConfigParser.from_args(args, wandb.run.name, options)
     wandb.config.update(config._config)
     main(config)
