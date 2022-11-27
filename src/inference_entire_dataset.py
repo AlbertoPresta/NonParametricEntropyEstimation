@@ -7,7 +7,7 @@ from compAi.utils.parser import parse_args, ConfigParser
 import argparse
 from Datasets.dataset import Datasets, TestKodakDataset
 from torch.utils.data import DataLoader
-from compAi.test.icme_testing import extract_results_on_entire_kodak
+from compAi.test.icme_testing import extract_results_on_entire_kodak, plot_convergence
 import pandas as pd
 import json
 import warnings
@@ -31,14 +31,17 @@ def main(config):
     test_dataset = TestKodakDataset(data_dir=path_images)
     dataloader = DataLoader(dataset=test_dataset, shuffle=False, batch_size=1, pin_memory=True, num_workers=1)
 
-
+    path = "/Users/albertopresta/Desktop/icme/files/factorized/convergence"
+    savepath =  "/Users/albertopresta/Desktop/icme/results/icme/factorized/entropycode"
+    plot_convergence(path, savepath,mode = "baseline", lmbda = "0018")
+    """
     print("----------------------------------------------------------------")
     extract_results_on_entire_kodak(models_path,    
                                     save_path, 
                                     dataloader,
                                     device = torch.device("cpu"))
     print("---------------------------------------------------------------- DONE ---------")
-    
+    """
 
 
 if __name__ == "__main__":

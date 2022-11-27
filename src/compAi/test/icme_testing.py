@@ -18,6 +18,7 @@ from os import makedirs
 from compressai.zoo import *
 from scipy.spatial.distance import jensenshannon
 import math
+import pandas as pd
 
 
 
@@ -261,7 +262,53 @@ def pillow_encode(img, fmt='jpeg', quality=10):
     
     
     
-  
+
+def plot_convergence(path, savepath,mode = "baseline", lmbda = "0018"):
+    
+    lista_csv = [join(path,f) for f in listdir(path) if mode in f and lmbda in f]
+    total_prob = np.zeros((len(lista_csv),21))
+    for i in range(len(lista_csv)):
+        if i%2==0 or i%2==1:
+            files = [f for f in lista_csv if str(i) in f.split(".")[0][-1]][0]
+            print("------------------ ",files)
+            
+            df = pd.read_csv(files)
+            if i==0:
+                x = df['x'].to_numpy()
+                x = x[20:41]
+            for f in list(df.columns):
+                if "p_y" in f:
+                    prob = df[f].to_numpy()
+            
+            prob = prob[20:41]
+            epoch = int(files.split("_")[2][0])
+            total_prob[i,:] = prob
+    
+
+ 
+    plt.figure(figsize=(14, 6))
+    
+    #plt.style.use('ggplot')
+    
+    plt.title('entropy model over epochs for ' + str(mode))
+    plt.xlabel('x')
+    plt.ylabel('probability distribution')
+    plt.xticks(np.arange(-10,10))
+    plt.yticks(np.arange(0,1.05,0.05))
+    for i in range(total_prob.shape[0]):
+    
+        plt.scatter(x=x,y=total_prob[i],marker='o',label="epoch " + str((i + 1)))
+        plt.plot(x,total_prob[i])
+   
+    plt.grid()
+    plt.legend(loc='upper right')
+    
+    
+    svp = join(savepath,"entropy_model_dix_baseline.png")
+    
+    plt.savefig(svp)
+        
+      
 
 
 

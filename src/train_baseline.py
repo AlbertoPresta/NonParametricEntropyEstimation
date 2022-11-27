@@ -156,7 +156,7 @@ def main(config):
         
         # plot sos curve 
         if epoch%1==0 :
-            for ii in [0,2]:              
+            for ii in [0]:              
                 plot_likelihood_baseline(net, device, epoch, dim = ii)
                 #plot_latent_space_frequency(net, test_dataloader, device,dim = ii, test = True)
 
