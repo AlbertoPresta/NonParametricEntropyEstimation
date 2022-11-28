@@ -13,7 +13,7 @@ import time
 from compAi.training.icme.loss import EntropyDistorsionLoss
 from compAi.training.icme.step  import train_one_epoch, test_epoch
 from compAi.training.icme.utility import CustomDataParallel, configure_optimizers, save_checkpoint,  plot_likelihood_baseline, plot_latent_space_frequency, plot_hyperprior_latent_space_frequency,compute_prob_distance, compress_with_ac
-from compAi.models.icme import FactorizedICME, ICMEScaleHyperprior, ICMEMeanScaleHyperprior
+from compAi.models.icme import FactorizedICME, ICMEScaleHyperprior, ICMEMeanScaleHyperprior, ICMEJointAutoregressiveHierarchicalPriors
 from compAi.utils.parser import parse_args, ConfigParser
 import collections
 
@@ -23,7 +23,8 @@ image_models = {
     "bmshj2018-factorized": bmshj2018_factorized,
     "icme2023-factorized": FactorizedICME,
     "icme2023-hyperprior": ICMEScaleHyperprior,
-    "icme2023-meanscalehyperprior": ICMEMeanScaleHyperprior
+    "icme2023-meanscalehyperprior": ICMEMeanScaleHyperprior,
+    "icme2023-jointAutoregressive":ICMEJointAutoregressiveHierarchicalPriors
 
 }
 
@@ -138,11 +139,11 @@ def main(config):
         start_enc = time.time()
 
 
-        bpp_ac = compress_with_ac(net,test_dataloader, device ,epoch)
+        #bpp_ac = compress_with_ac(net,test_dataloader, device ,epoch)
         print("time needen for ac to encode and decode is ",time.time() - start_enc)
 
         is_best = loss < best_loss
-        trigger = best_bpp > bpp_ac
+        #trigger = best_bpp > bpp_ac
 
         best_loss = min(loss, best_loss)
         best_bpp = min(loss_bpp, best_loss)
@@ -168,6 +169,7 @@ def main(config):
             filename_best
         ) 
         
+        """
         if trigger: 
             filename = config["saving"]["filename"] + str(config["cfg"]["trainer"]["lambda"]) + "bpp" + config["saving"]["suffix"] 
             filename_best = config["saving"]["filename"] + str(config["cfg"]["trainer"]["lambda"]) + "bpp" + "_best" +  config["saving"]["suffix"]
@@ -188,6 +190,7 @@ def main(config):
                 filename, 
                 filename_best
             ) 
+        """
         if epoch%25==0 or epoch == 799:
             filename = config["saving"]["filename"] + "epoch" + str(epoch) + str(config["cfg"]["trainer"]["lambda"]) + "bpp" + config["saving"]["suffix"] 
             filename_best = config["saving"]["filename"] + "epoch" + str(epoch) +  str(config["cfg"]["trainer"]["lambda"]) + "bpp" + "_best" +  config["saving"]["suffix"]
@@ -213,21 +216,21 @@ def main(config):
         # plot sos curve 
 
             #plot_likelihood_baseline(net, device, epoch)
-        if epoch%1==0:
-            for ii in [2]:
+        #if epoch%1==0:
+        #    for ii in [2]:
                 #(net, device, epoch,dim = ii)
-                res_test = plot_latent_space_frequency(net, test_dataloader, device,epoch,dim = ii, test = True)
-            """
-            if epoch%10==0 :
-                for ii in [0,1,2,3,55,191,127,160,172,68,100,91,87,90,88,23,10]:
-                    if config["arch"]["model"] == "icme2023-factorized":
-                        res_test = plot_latent_space_frequency(net, test_dataloader, device,dim = ii, test = True)
-                        res_train = plot_latent_space_frequency(net, train_dataloader_plot, device,dim = ii, test = False)
-                    else:
-                        res_test = plot_hyperprior_latent_space_frequency(net, test_dataloader, device,dim = ii, test = True)
-                        res_train = plot_hyperprior_latent_space_frequency(net, train_dataloader_plot, device,dim = ii, test = False)   
+               # res_test = plot_latent_space_frequency(net, test_dataloader, device,epoch,dim = ii, test = True)
+            
+        if epoch%25==0 :
+            for ii in [0,100,127]:
+                if config["arch"]["model"] == "icme2023-factorized":
+                    res_test = plot_latent_space_frequency(net, test_dataloader, device,0,dim = ii, test = True)
+                    res_train = plot_latent_space_frequency(net, train_dataloader_plot, device,0,dim = ii, test = False)
+                else:
+                    res_test = plot_hyperprior_latent_space_frequency(net, test_dataloader, device,dim = ii, test = True)
+                    res_train = plot_hyperprior_latent_space_frequency(net, train_dataloader_plot,device,dim = ii, test = False)   
                              
-            """
+
 
 
         """
@@ -244,9 +247,9 @@ def main(config):
             res_test = plot_latent_space_frequency(net, test_dataloader, device,dim = ii, test = True)
             res_train = plot_latent_space_frequency(net, train_dataloader_plot, device,dim = ii, test = False)
         else:
-            res_test = plot_hyperprior_latent_space_frequency(net, test_dataloader, device,dim = ii, test = True)
-            res_train = plot_hyperprior_latent_space_frequency(net, train_dataloader_plot, device,dim = ii, test = False)   
-
+            res_test = plot_hyperprior_latent_space_frequency(net, test_dataloader, device,1000,dim = ii, test = True)
+            res_train = plot_hyperprior_latent_space_frequency(net, train_dataloader_plot, device,1000,dim = ii, test = False)   
+    
 
 if __name__ == "__main__":
     args = argparse.ArgumentParser(description='PyTorch Template')
@@ -268,7 +271,7 @@ if __name__ == "__main__":
 
     ]
     
-    wandb.init(project="analysis_latentspace", entity="albertopresta")
+    wandb.init(project="icme_jointautoregressive", entity="albertopresta")
     config = ConfigParser.from_args(args, wandb.run.name, options)
     wandb.config.update(config._config)
     main(config)

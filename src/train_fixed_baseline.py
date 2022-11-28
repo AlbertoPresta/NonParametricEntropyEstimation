@@ -18,6 +18,16 @@ from compAi.utils.parser import parse_args, ConfigParser
 import collections
 
 
+from compressai.models import (
+    Cheng2020Anchor,
+    Cheng2020Attention,
+    FactorizedPrior,
+    JointAutoregressiveHierarchicalPriors,
+    MeanScaleHyperprior,
+    ScaleHyperprior,
+)
+
+
 
 image_models = {
     "bmshj2018-factorized": bmshj2018_factorized,
@@ -78,8 +88,12 @@ def main(config):
     )
 
 
-    net = image_models[config["arch"]["model"]](quality = config["arch"]["quality"])
+
+
+
+    net = image_models[config["arch"]["model"]](quality = config["arch"]["quality"], pretrained = True )
     net = net.to(device)
+    net.update(force = True)
 
 
     optimizer, aux_optimizer = configure_optimizers(net, config)
@@ -100,16 +114,16 @@ def main(config):
 
 
 
-    checkpoint = torch.load(config["saving"]["checkpoint_path"], map_location=device)
-    last_epoch = checkpoint["epoch"] + 1
-    net.load_state_dict(checkpoint["state_dict"])
+    #checkpoint = torch.load(config["saving"]["checkpoint_path"], map_location=device)
+    #last_epoch = checkpoint["epoch"] + 1
+    #net.load_state_dict(checkpoint["state_dict"])
     #optimizer.load_state_dict(checkpoint["optimizer"])
-    aux_optimizer.load_state_dict(checkpoint["aux_optimizer"])
+    #aux_optimizer.load_state_dict(checkpoint["aux_optimizer"])
     #lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
     
     
     # reinizializzare la rete centrale 
-    reinitialize_entropy_model(net)
+    #reinitialize_entropy_model(net)
     
     # freeze of the encoder and decodestring()
     freeze_autoencoder(net)
@@ -192,7 +206,7 @@ def main(config):
         
     for ii in range(191):
         plot_likelihood_baseline(net, device, epoch, dim = ii)
-        plot_latent_space_frequency(model, test_dataloader, device,dim = ii, test = True)
+        plot_latent_space_frequency(net, test_dataloader, device,dim = ii, test = True)
 
 if __name__ == "__main__":
     args = argparse.ArgumentParser(description='PyTorch Template')

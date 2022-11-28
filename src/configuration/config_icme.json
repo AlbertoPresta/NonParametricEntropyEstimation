@@ -1,9 +1,9 @@
 {
 
     "arch": {
-    "model": "icme2023-factorized",
-    "name": "icme2023-factorized",
-    "N":128,
+    "model": "icme2023-jointAutoregressive",
+    "name": "icme2023-jointAutoregressive",
+    "N":192,
     "M":192
         },
 
@@ -31,12 +31,12 @@
 
 
         "trainer": {
-            "epochs":800,
+            "epochs":600,
             "metric":"mse",
-            "lambda": 0.013,
+            "lambda": 0.0018,
             "lr":1e-4,
             "aux_lr": 1e-3,           
-            "mode": "factorized",
+            "mode": "hyperprior",
             "clip_max_norm":1.0, 
             "power": 1.0
 

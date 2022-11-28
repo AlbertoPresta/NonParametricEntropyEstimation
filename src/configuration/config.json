@@ -36,7 +36,7 @@
             "epochs":800,
             "metric":"mse",
             "lambda": 0.018,
-            "lr":1e-4,
+            "lr":1e-5,
             "aux_lr": 1e-3,
             
             "clip_max_norm":1.0

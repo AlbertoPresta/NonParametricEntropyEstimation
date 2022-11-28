@@ -308,6 +308,11 @@ def plot_convergence(path, savepath,mode = "baseline", lmbda = "0018"):
     
     plt.savefig(svp)
         
+
+
+
+def loss_functions():
+    pass
       
 
 

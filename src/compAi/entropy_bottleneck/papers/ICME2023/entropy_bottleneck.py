@@ -126,9 +126,9 @@ class EntropyModel(nn.Module):
     def quantize(self, inputs, training,  means = None):
 
         if training:
-            half = float(0.5)
-            noise = torch.empty_like(inputs).uniform_(-half, half)
-            inputs = inputs + noise
+           # half = float(0.5)
+           # noise = torch.empty_like(inputs).uniform_(-half, half)
+           # inputs = inputs + noise
             return inputs
         outputs = inputs.clone()
         
@@ -422,8 +422,10 @@ class  EntropyBottleneck(EntropyModel):
 
     
     
-    def compress(self, x):
-        x = self.quantize(x, False,map = self.float_to_int) 
+    def compress(self, x,means = None):
+
+        x = self.quantize(x, False, means = means) 
+        x = x.detach().apply_(lambda x: self.transform_map(x, self.float_to_int))  
         symbols = x #[1,192,32,48]
         M = symbols.size(1)        
         symbols = symbols.to(torch.int16)
