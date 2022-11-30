@@ -271,7 +271,7 @@ if __name__ == "__main__":
 
     ]
     
-    wandb.init(project="icme_jointautoregressive", entity="albertopresta")
+    wandb.init(project="meanscalehyperprior_icme", entity="albertopresta")
     config = ConfigParser.from_args(args, wandb.run.name, options)
     wandb.config.update(config._config)
     main(config)

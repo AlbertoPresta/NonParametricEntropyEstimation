@@ -201,6 +201,7 @@ class FactorizedICME(CompressionModel):
         return {"x_hat": x_hat}
     
  
+
 ###########################################################################################################  
 ###########################################################################################################   
 ############################################# HYPERPRIOR ##################################################
@@ -262,10 +263,6 @@ class ICMEScaleHyperprior(CompressionModel):
             nn.ReLU(inplace=True),
         )
 
-
-
-
-
         self.gaussian_conditional = GaussianConditional(None)
         self.N = int(N)
         self.M = int(M)
@@ -313,7 +310,7 @@ class ICMEScaleHyperprior(CompressionModel):
         y = self.g_a(x)
         z = self.h_a(torch.abs(y))
 
-        z_hat, z_likelihoods , probability= self.entropy_bottleneck(z)
+        z_hat, z_likelihoods , z_probability= self.entropy_bottleneck(z)
         scales_hat = self.h_s(z_hat)
         y_hat, y_likelihoods = self.gaussian_conditional(y, scales_hat)
         x_hat = self.g_s(y_hat)
@@ -321,7 +318,7 @@ class ICMEScaleHyperprior(CompressionModel):
         return {
             "x_hat": x_hat,
             "likelihoods": {"y": y_likelihoods, "z": z_likelihoods},
-            "probability": probability
+            "probability": z_probability
         }
 
     def load_state_dict(self, state_dict):
@@ -343,25 +340,21 @@ class ICMEScaleHyperprior(CompressionModel):
         return net
 
     def update(self, scale_table=None, force=True):
-        print("entro qua ad update")
         if scale_table is None:
             scale_table = get_scale_table()
-        scale_table = get_scale_table()
-        print("resulting scale table is: ",scale_table)
         updated = self.gaussian_conditional.update_scale_table(scale_table, force=force)
         updated |= super().update()
         return updated
 
 
-    def compress_during_training(self, x,  device = torch.device("cuda")):
+    def compress_during_training(self, x, device = torch.device("cuda")):
         y = self.g_a(x)
         z = self.h_a(torch.abs(y))
-
-        z_strings = self.entropy_bottleneck.compress_during_training(z,device = device)
+        z_strings = self.entropy_bottleneck.compress_during_training(z, device = device)
         z_hat = self.entropy_bottleneck.decompress_during_training(z_strings, z.size()[-2:])
-        
         scales_hat = self.h_s(z_hat)
         indexes = self.gaussian_conditional.build_indexes(scales_hat)
+
         y_strings = self.gaussian_conditional.compress_during_training(y, indexes)
         return {"strings": [y_strings, z_strings], "shape": z.size()[-2:]}
 
@@ -370,7 +363,6 @@ class ICMEScaleHyperprior(CompressionModel):
         z_hat = self.entropy_bottleneck.decompress_during_training(strings[1], shape)
         scales_hat = self.h_s(z_hat)
         indexes = self.gaussian_conditional.build_indexes(scales_hat)
-
         y_hat = self.gaussian_conditional.decompress_during_training(strings[0], indexes, z_hat.dtype)
         x_hat = self.g_s(y_hat).clamp_(0, 1)
         return {"x_hat": x_hat}
@@ -408,9 +400,6 @@ class ICMEMeanScaleHyperprior(ICMEScaleHyperprior):
             conv(M * 3 // 2, M * 2, stride=1, kernel_size=3),
         )
 
-
-
-
     def forward(self, x):
         y = self.g_a(x)
         z = self.h_a(y)
@@ -426,22 +415,11 @@ class ICMEMeanScaleHyperprior(ICMEScaleHyperprior):
             "probability": probability
         }
 
-
-
-    def compress(self, x, device= torch.device("cuda")):
-        y = self.g_a(x)
-        z = self.h_a(y)
-        z_strings = self.entropy_bottleneck.compress(z)
-        z_hat = self.entropy_bottleneck.decompress(z_strings, z.size()[-2:])
-
-
-
-    def compress_during_training(self, x, device = torch.device("cuda")):
+    def compress(self, x):
         y = self.g_a(x)
         z = self.h_a(y)
 
-        z_strings = self.entropy_bottleneck.compress_during_training(z,device = device)
-        
+        z_strings = self.entropy_bottleneck.compress_during_training(z)
         z_hat = self.entropy_bottleneck.decompress_during_training(z_strings, z.size()[-2:])
 
         gaussian_params = self.h_s(z_hat)
@@ -450,7 +428,7 @@ class ICMEMeanScaleHyperprior(ICMEScaleHyperprior):
         y_strings = self.gaussian_conditional.compress_during_training(y, indexes, means=means_hat)
         return {"strings": [y_strings, z_strings], "shape": z.size()[-2:]}
 
-    def decompress_during_training(self, strings, shape):
+    def decompress(self, strings, shape):
         assert isinstance(strings, list) and len(strings) == 2
         z_hat = self.entropy_bottleneck.decompress_during_training(strings[1], shape)
         gaussian_params = self.h_s(z_hat)
@@ -459,6 +437,7 @@ class ICMEMeanScaleHyperprior(ICMEScaleHyperprior):
         y_hat = self.gaussian_conditional.decompress_during_training(strings[0], indexes, means=means_hat)
         x_hat = self.g_s(y_hat).clamp_(0, 1)
         return {"x_hat": x_hat}
+
 
 
 

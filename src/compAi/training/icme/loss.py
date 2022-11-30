@@ -19,6 +19,7 @@ class EntropyDistorsionLoss(nn.Module):
 
 
 
+
     def forward(self, output, target):
 
         N, _, H, W = target.size() 
@@ -28,9 +29,9 @@ class EntropyDistorsionLoss(nn.Module):
         like_dim = bs*w*h  #8192
         out = {}
         num_pixels = N * H * W
-        out["mse_loss"] = self.dist_metric(output["x_hat"], target)    
+        out["mse_loss"] = self.dist_metric(output["x_hat"], target)
+        out["bpp_loss"] =   sum((torch.log(likelihoods).sum() / (-math.log(2) * num_pixels)) for likelihoods in output["likelihoods"].values())    
         out["entropy"] =  -torch.sum(output["probability"]*(torch.log(output["probability"])/math.log(2)))*like_dim/(num_pixels)
-           
         if self.mode == "factorized":
             out["bpp_loss"] =   sum((torch.log(likelihoods).sum() / (-math.log(2) * num_pixels)) for likelihoods in output["likelihoods"].values())   
             out["loss"] =  self.lmbda * 255**2 * out["mse_loss"] + out["entropy"] 
@@ -44,8 +45,7 @@ class EntropyDistorsionLoss(nn.Module):
             out["loss"] =  self.lmbda * 255**2 * out["mse_loss"]   + out["entropy"] + bpp_loss_gauss
             out["bpp_gauss"] = bpp_loss_gauss
             out["bpp_hype"] = bpp_loss_hype
-        return out
-    
 
+        return out
 
 

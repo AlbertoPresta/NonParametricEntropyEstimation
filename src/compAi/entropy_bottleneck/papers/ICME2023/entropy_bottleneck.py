@@ -126,13 +126,14 @@ class EntropyModel(nn.Module):
     def quantize(self, inputs, training,  means = None):
 
         if training:
-           # half = float(0.5)
-           # noise = torch.empty_like(inputs).uniform_(-half, half)
-           # inputs = inputs + noise
+            half = float(0.5)
+            noise = torch.empty_like(inputs).uniform_(-half, half)
+            inputs = inputs + noise
             return inputs
         outputs = inputs.clone()
         
         if means is not None:
+            print("means is not none")
             outputs -= means
         outputs = torch.round(outputs)        
 

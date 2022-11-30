@@ -91,11 +91,19 @@ def main(config):
     models_path = "/Users/albertopresta/Desktop/icme/models/factorized/icme"
     image_name = "kodim01.png"
     
+
+    import os 
+    print("-----------------------------> ",os.getwdr())
+    lista_df = [ ]
+
+    loss_functions(lista_df)
+
+
     
     lista_immagini = os.listdir(path_images)
-    for f in lista_immagini:
-        print("--------------------- ",f,"  ----------------------------")
-        plot_diagram_and_images(models_path, save_path, path_images, f)
+    #for f in lista_immagini:
+    #    print("--------------------- ",f,"  ----------------------------")
+    #    plot_diagram_and_images(models_path, save_path, path_images, f)
     
     
     

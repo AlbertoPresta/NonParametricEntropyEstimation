@@ -1,8 +1,8 @@
 {
 
     "arch": {
-    "model": "icme2023-jointAutoregressive",
-    "name": "icme2023-jointAutoregressive",
+    "model": "icme2023-meanscalehyperprior",
+    "name": "icme2023-meanscalehyperprior",
     "N":192,
     "M":192
         },

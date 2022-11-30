@@ -119,13 +119,15 @@ def train_one_epoch( model, criterion, train_dataloader, optimizer,epoch,clip_ma
 
 
 
-
 def test_epoch(epoch, test_dataloader, model, criterion  ):
     model.eval()
     device = next(model.parameters()).device
 
     loss = AverageMeter()
     bpp_loss = AverageMeter()
+
+    hype_loss = AverageMeter()
+    gauss_loss = AverageMeter()
 
     mse_loss = AverageMeter()
     entropy_loss = AverageMeter()
@@ -143,11 +145,15 @@ def test_epoch(epoch, test_dataloader, model, criterion  ):
             psnr.update(compute_psnr(d, out_net["x_hat"]))
             ssim.update(compute_msssim(d, out_net["x_hat"]))           
             bpp_loss.update(out_criterion["bpp_loss"].clone().detach())
-                                
+
+            hype_loss.update(out_criterion["bpp_hype"].clone().detach())
+            gauss_loss.update(out_criterion["bpp_gauss"].clone().detach())
             loss.update(out_criterion["loss"].clone().detach())
             mse_loss.update(out_criterion["mse_loss"].clone().detach())
             entropy_loss.update(out_criterion["entropy"].clone().detach())
  
+
+            
 
                 
 
@@ -165,6 +171,8 @@ def test_epoch(epoch, test_dataloader, model, criterion  ):
     "test":epoch,
     "test/loss": loss.avg,
     "test/bpp":bpp_loss.avg,
+    "test/bpp_hype":hype_loss.avg,
+    "test/bpp_gauss":gauss_loss.avg,
     "test/mse": mse_loss.avg,
     "test/entropy":entropy_loss.avg,
     "test/psnr":psnr.avg,
