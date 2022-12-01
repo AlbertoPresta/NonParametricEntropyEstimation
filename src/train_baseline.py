@@ -12,7 +12,7 @@ import wandb
 import time
 from compAi.training.baseline.loss import RateDistortionLoss
 from compAi.training.baseline.step  import train_one_epoch, test_epoch
-from compAi.training.baseline.utility import plot_latent_space_frequency,compress_with_ac, AverageMeter, CustomDataParallel, configure_optimizers, save_checkpoint, plot_quantized_pmf, plot_likelihood_baseline
+from compAi.training.baseline.utility import plot_latent_space_frequency, compress_with_ac, AverageMeter, CustomDataParallel, configure_optimizers, save_checkpoint, plot_likelihood_baseline
 
 from compAi.utils.parser import parse_args, ConfigParser
 import collections
@@ -155,22 +155,13 @@ def main(config):
             
         
         # plot sos curve 
-        if epoch%1==0 :
-            for ii in [0]:              
+        if epoch%10==0:
+            for ii in [104,67,99,30,123,57,0,14,101,110]:
                 plot_likelihood_baseline(net, device, epoch, dim = ii)
-                #plot_latent_space_frequency(net, test_dataloader, device,dim = ii, test = True)
-
-        
-        
-        #compress_with_ac(net, test_dataloader, device,epoch)
-            #plot_quantized_pmf(net, device, epoch)
-
+                #compress_with_ac(net, test_dataloader, device,epoch)
+                plot_latent_space_frequency(net, test_dataloader, device,epoch,dim = ii, test = True)
         end = time.time()
         print("Runtime of the epoch " + str(epoch) + " is: ", end - start)
-        
-    for ii in range(191):
-        plot_likelihood_baseline(net, device, epoch, dim = ii)
-        plot_latent_space_frequency(model, test_dataloader, device,dim = ii, test = True)
 
 if __name__ == "__main__":
     args = argparse.ArgumentParser(description='PyTorch Template')
@@ -192,7 +183,7 @@ if __name__ == "__main__":
 
     ]
     
-    wandb.init(project="analysis_latentspace", entity="albertopresta")
+    wandb.init(project="scale_trial", entity="albertopresta")
     config = ConfigParser.from_args(args, wandb.run.name, options)
     wandb.config.update(config._config)
     main(config)

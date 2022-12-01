@@ -4,8 +4,8 @@
 {
 
     "arch": {
-    "model":"bmshj2018-factorized",
-    "name":"bmshj2018-factorized",
+    "model":"bmshj2018-hyperprior",
+    "name":"bmshj2018-hyperprior",
     "quality":1
         },
 
@@ -28,15 +28,15 @@
         "n-gpu":1,
         "num_workers":4,
         "device":"cuda",
-        "seed":42,
+        "seed":123,
 
 
 
         "trainer": {
             "epochs":800,
             "metric":"mse",
-            "lambda": 0.018,
-            "lr":1e-5,
+            "lambda": 0.0018,
+            "lr":1e-4,
             "aux_lr": 1e-3,
             
             "clip_max_norm":1.0
@@ -45,11 +45,11 @@
         },
         "saving": {
             "save":true,
-            "filename":"/scratch/icme_",
+            "filename":"/scratch/new_models",
             "suffix": ".pth.tar",
             "checkpoint": false,
-            "checkpoint_path":"/scratch/pretrained_models/bmshj2018-factorized_0018.pth.tar",
-            "name":"bmshj2018-factorized_0018.pth.tar"
+            "checkpoint_path":"/scratch/pretrained_models",
+            "name":"1019_ns14.pth.tar"
         }
 
 }

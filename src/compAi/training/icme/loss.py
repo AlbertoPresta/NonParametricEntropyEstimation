@@ -20,7 +20,7 @@ class EntropyDistorsionLoss(nn.Module):
 
 
 
-    def forward(self, output, target):
+    def forward(self, output, target, ep = 100):
 
         N, _, H, W = target.size() 
   
@@ -42,7 +42,10 @@ class EntropyDistorsionLoss(nn.Module):
             bpp_loss_hype = sum((torch.log(likelihoods).sum() / (-math.log(2) * num_pixels)) for likelihoods in output["likelihoods"]["z"])   
             bpp_loss_gauss = sum((torch.log(likelihoods).sum() / (-math.log(2) * num_pixels)) for likelihoods in output["likelihoods"]["y"]) 
             out["bpp_loss"] =  bpp_loss_hype + bpp_loss_gauss
-            out["loss"] =  self.lmbda * 255**2 * out["mse_loss"]   + out["entropy"] + bpp_loss_gauss
+            if ep <=-1:
+                out["loss"] =  self.lmbda * 255**2 * out["mse_loss"]  + bpp_loss_gauss
+            else:
+                out["loss"] =  self.lmbda * 255**2 * out["mse_loss"]    + bpp_loss_gauss + 0.05*out["entropy"] 
             out["bpp_gauss"] = bpp_loss_gauss
             out["bpp_hype"] = bpp_loss_hype
 

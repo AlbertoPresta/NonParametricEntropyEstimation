@@ -7,7 +7,6 @@ from torchvision.utils import make_grid
 import time
 import math 
 from pytorch_msssim import ms_ssim
-import numpy as np
 class AverageMeter:
     """Compute running average."""
 
@@ -101,73 +100,14 @@ def compute_bpp(out_net, out_enc = None):
         bpp = sum(len(s[0]) for s in out_enc["strings"]) * 8.0 / num_pixels
         return bpp
     
-      
-def plot_quantized_pmf(net, device, epoch):
-    """Plot
-    FUnction that prints and log to wandb 
-    """ 
-
-    # calculate max_length
-    print("sono dentro")
-    bottleneck = net.entropy_bottleneck
-    medians = bottleneck.quantiles[:, 0, 1]
-    minima = medians -  bottleneck.quantiles[:, 0, 0]
-    minima = torch.ceil(minima).int()
-    minima = torch.clamp(minima, min=0)
-    maxima =  bottleneck.quantiles[:, 0, 2] - medians
-    maxima = torch.ceil(maxima).int()
-    maxima = torch.clamp(maxima, min=0)
-    pmf_length = maxima + minima + 1
-    max_length = pmf_length.max().item()
-    
-    device = pmf_length.device
-    samples = torch.arange(max_length, device=device)
-
-    samples = samples[None, :] + pmf_length[:, None, None]
-
-
-
-    half = float(0.5)
-        
-
-    lower = net.entropy_bottleneck._logits_cumulative(samples - half, stop_gradient=True)
-    upper = net.entropy_bottleneck._logits_cumulative(samples + half, stop_gradient=True)
-    sign = -torch.sign(lower + upper)
-    pmf = torch.abs(torch.sigmoid(sign * upper) - torch.sigmoid(sign * lower))
-
-    pmf = pmf[:, 0, :]
-    
-    
-    #tail_mass = torch.sigmoid(lower[:, 0, :1]) + torch.sigmoid(-upper[:, 0, -1:])
-    #quantized_cdf = net.entropy_bottleneck._pmf_to_cdf(pmf, tail_mass, pmf_length, max_length)
-
-    x_values = samples[0,0,:]
-    y_values = pmf[0,:]
-    """
-    print(x_values)
-    print(y_values)
-    print(x_values.shape)
-    print(y_values.shape)
-    """
-    data = [[x, y] for (x, y) in zip(x_values,y_values)]
-    table = wandb.Table(data=data, columns = ["x", "pmf"])
-    wandb.log({"quantized pmf ": wandb.plot.line(table, "x", "pmf", title='quatized pmf at epoch' + str(epoch))})
 
 
 def bpp_calculation(out_net, out_enc):
         size = out_net['x_hat'].size() 
         num_pixels = size[0] * size[2] * size[3]
-
         bpp = sum(len(s[0]) for s in out_enc["strings"]) * 8.0 / num_pixels
-        #bpp_y = sum(len(s[0]) for s in out_enc["strings"]) * 8.0 / num_pixels
-        bpp_y = bpp #len(out_enc["strings"][0][0]) * 8.0 / num_pixels
-        bpp_z = bpp # len(out_enc["strings"][1][0]) * 8.0 / num_pixels
-        #bpp = bpp_y + bpp_z
-        return bpp, bpp_y, bpp_z
- 
-    
-    
-    
+        return bpp
+
 def compress_with_ac(model, test_dataloader, device,epoch):
     model.update(force = True)
     bpp_loss = AverageMeter()
@@ -176,8 +116,6 @@ def compress_with_ac(model, test_dataloader, device,epoch):
     timing_all = AverageMeter()
     timing_enc = AverageMeter()
     timing_dec = AverageMeter()
-    bpp_gauss = AverageMeter()
-    bpp_hype = AverageMeter()
     start = time.time()    
     with torch.no_grad():
         for i,d in enumerate(test_dataloader): 
@@ -191,9 +129,7 @@ def compress_with_ac(model, test_dataloader, device,epoch):
             timing_dec.update(time.time() - start)
             timing_all.update(time.time() - start_all)
             #out_dec["x_hat"].clamp_(0.,1.)
-            bpp, bpp_gaussian , bpp_hyperprior = bpp_calculation(out_dec, out_enc)
-            bpp_gauss.update(bpp_gaussian)
-            bpp_hype.update(bpp_hyperprior)
+            bpp = bpp_calculation(out_dec, out_enc)
             bpp_loss.update(bpp)
             psnr.update(compute_psnr(d, out_dec["x_hat"]))
             mssim.update(compute_msssim(d, out_dec["x_hat"]))   
@@ -201,8 +137,6 @@ def compress_with_ac(model, test_dataloader, device,epoch):
     log_dict = {
             "test":epoch,
             "test/bpp_with_ac": bpp_loss.avg,
-            "test/bpp_with_ac_gaussian":bpp_gauss.avg,
-            "test/bpp_with_ac_hype":bpp_hype.avg,
             "test/psnr_with_ac": psnr.avg,
             "test/mssim_with_ac":mssim.avg, 
             "test/timing_all":timing_all.avg,
@@ -215,67 +149,23 @@ def compress_with_ac(model, test_dataloader, device,epoch):
 
 
 def plot_likelihood_baseline(net, device, epoch,n = 1000, dim = 0):
-
-    space = (61)/n
-    x_values = torch.arange(-30, 31)
-    sample = x_values.repeat(192, 1).unsqueeze(1).to(device) # [192,1,1000]
+    #minimo = torch.min(net.entropy_bottleneck.quantiles[:,:,0]).item()
+    #massimo = torch.max(net.entropy_bottleneck.quantiles[:,:,2]).item()
+    minimo = -30
+    massimo = 30
+    space = (massimo - minimo)/n
+    x_values = torch.arange(minimo, massimo)
+    sample = x_values.repeat(net.N, 1).unsqueeze(1).to(device) # [192,1,1000]
     
-    y_values = net.entropy_bottleneck._likelihood(sample)[dim, :].squeeze(0) 
+    y_values = net.entropy_bottleneck._likelihood(sample)[dim, :].squeeze(0) #[1000]
     data = [[x, y] for (x, y) in zip(x_values,y_values)]
-    table = wandb.Table(data=data, columns = ["x", "p_y_" + str(epoch) + "_" + str(dim)])
-    wandb.log({'likelihood function at dimension ' + str(dim) + " epoch " + str(epoch): wandb.plot.line(table, "x", "p_y_" + str(epoch) + "_" + str(dim), title='likelihood function at dimension ' + str(dim) + " epoch " + str(epoch))})
+    table = wandb.Table(data=data, columns = ["x", "p_y"])
+    wandb.log({"llikelihood at dimesion " + str(dim): wandb.plot.scatter(table, "x", "p_y", title="likelihood at dimesion " + str(dim))})
+    
     
 
-def freeze_autoencoder(model):
-    
-    for i,l in enumerate(model.g_s):
-        if i%2==0: # convolutional level 2d
 
-            model.g_a[i].weight.requires_grad = False
-            model.g_a[i].bias.requires_grad = False
-            model.g_s[i].weight.requires_grad = False
-            model.g_s[i].bias.requires_grad = False
-        else:               
-            model.g_s[i].beta.requires_grad = False
-            model.g_s[i].beta_reparam.pedestal.requires_grad = False
-            model.g_s[i].beta_reparam.lower_bound.bound.requires_grad = False
-            model.g_s[i].gamma.requires_grad = False
-            model.g_s[i].gamma_reparam.pedestal.requires_grad = False 
-            model.g_s[i].gamma_reparam.lower_bound.bound.requires_grad = False
-                              
-            model.g_a[i].beta.requires_grad = False
-            model.g_a[i].beta_reparam.pedestal.requires_grad = False
-            model.g_a[i].beta_reparam.lower_bound.bound.requires_grad = False
-            model.g_a[i].gamma.requires_grad = False
-            model.g_a[i].gamma_reparam.pedestal.requires_grad = False 
-            model.g_a[i].gamma_reparam.lower_bound.bound.requires_grad = False      
-
-def reinitialize_entropy_model(model): 
-
-    filters = (1,) + model.entropy_bottleneck.filters + (1,)
-    scale = model.entropy_bottleneck.init_scale ** (1 / (len(model.entropy_bottleneck.filters) + 1))
-    channels = model.entropy_bottleneck.channels
-    num_params = 0
-    #matrix = getattr(self, f"_matrix{i:d}")
-    for i in range(len(model.entropy_bottleneck.filters) + 1):
-        init = np.log(np.expm1(1 / scale / filters[i + 1]))
-        matrix = getattr(model.entropy_bottleneck, f"_matrix{i:d}")
-        num_params += matrix.reshape(-1).shape[0]
-        matrix.data.fill_(init)
-        model.entropy_bottleneck.register_parameter(f"_matrix{i:d}", nn.Parameter(matrix))
-        
-        bias = getattr(model.entropy_bottleneck, f"_bias{i:d}")
-        num_params += bias.reshape(-1).shape[0]
-        nn.init.uniform_(bias, -0.5, 0.5)
-        model.entropy_bottleneck.register_parameter(f"_bias{i:d}", nn.Parameter(bias))
-
-        if i < len(model.entropy_bottleneck.filters):
-            factor = getattr(model.entropy_bottleneck, f"_factor{i:d}") 
-            num_params += factor.reshape(-1).shape[0]
-            nn.init.zeros_(factor)
-            model.entropy_bottleneck.register_parameter(f"_factor{i:d}", nn.Parameter(factor))   
-    print("NUMBER OF PARAMETERS ARE: ",num_params)
-def plot_latent_space_frequency(model, test_dataloader, device,dim = 0, test = True):
+def plot_latent_space_frequency(model, test_dataloader, device,epoch,dim = 0, test = True):
         model.eval()
         extrema = 30
         if test is True:
@@ -310,36 +200,7 @@ def plot_latent_space_frequency(model, test_dataloader, device,dim = 0, test = T
         res = res.reshape(-1)
         res = res/torch.sum(res)
 
-        if test is True:
-            x_values = torch.arange(-extrema, extrema + 1)      
-            data = [[x, y] for (x, y) in zip(x_values,res)]
-            table = wandb.Table(data=data, columns = ["x", "p_y"])
-            wandb.log({"test frequency statistics at dimension" + str(dim): wandb.plot.scatter(table, "x", "p_y", title='test frequency statistics at dimension ' + str(dim))})         
-        else:
-            x_values = torch.arange(-extrema, extrema + 1)      
-            data = [[x, y] for (x, y) in zip(x_values,res)]
-            table = wandb.Table(data=data, columns = ["x", "p_y"])
-            wandb.log({"train frequency statistics at dimension" + str(dim): wandb.plot.scatter(table, "x", "p_y", title='train frequency statistics at dimension ' + str(dim))})   
-        return res
-             
-
-
-def load_pretrained_baseline_for_training( mod_load,  architecture, activation,  ml, reinitialization = True):
-
-
-    
-    extrema = mod_load["extrema"]
-    model = architecture(N, M, beta, num_sigmoids,activation = activation, entropy_type = entropy_type,extrema = extrema)
-    model = model.to(ml)
-    model.load_state_dict(mod_load["state_dict"],strict=False)   
-    model.entropy_bottleneck.sos.beta = beta
-    model.entropy_bottleneck.sos.update_cumulative_weights()
-    model.to(ml)
-    model.update( device = torch.device("cuda"))
-    if entropy_type == "ufwr" and reinitialization is True:
-        model.entropy_bottleneck.initialize_entropy_model()       
-    if entropy_type == "dfs":
-        pmf = mod_load["pmf"]
-        model.pmf = pmf 
-        model.entropy_bottleneck.pmf = pmf
-    return model
+        x_values = torch.arange(-extrema, extrema + 1)      
+        data = [[x, y] for (x, y) in zip(x_values,res)]
+        table = wandb.Table(data=data, columns = ["x", "p_y"+ str(dim) + " " + str(epoch)])
+        wandb.log({"counter/test frequency statistics at dimension " + str(dim) + " " + str(epoch): wandb.plot.scatter(table, "x", "p_y"+ str(dim) + " " + str(epoch), title='test frequency statistics at dimension ' + str(dim) + " " + str(epoch))}) 

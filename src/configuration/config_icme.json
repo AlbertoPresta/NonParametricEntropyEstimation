@@ -1,9 +1,9 @@
 {
 
     "arch": {
-    "model": "icme2023-meanscalehyperprior",
-    "name": "icme2023-meanscalehyperprior",
-    "N":192,
+    "model": "icme2023-hyperprior",
+    "name": "icme2023-hyperprior",
+    "N":128,
     "M":192
         },
 
@@ -38,7 +38,8 @@
             "aux_lr": 1e-3,           
             "mode": "hyperprior",
             "clip_max_norm":1.0, 
-            "power": 1.0
+            "power": 1.0,
+            "delta": 1.0
 
             }
         },

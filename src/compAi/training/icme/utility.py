@@ -93,11 +93,11 @@ def bpp_calculation(out_net, out_enc):
         size = out_net['x_hat'].size() 
         num_pixels = size[0] * size[2] * size[3]
 
-        bpp = sum(len(s[0]) for s in out_enc["strings"]) * 8.0 / num_pixels
+        #pp = sum(len(s[0]) for s in out_enc["strings"]) * 8.0 / num_pixels
         #bpp_y = sum(len(s[0]) for s in out_enc["strings"]) * 8.0 / num_pixels
-        bpp_y = bpp #len(out_enc["strings"][0][0]) * 8.0 / num_pixels
-        bpp_z = bpp # len(out_enc["strings"][1][0]) * 8.0 / num_pixels
-        #bpp = bpp_y + bpp_z
+        bpp_y = len(out_enc["strings"][0][0]) * 8.0 / num_pixels
+        bpp_z = len(out_enc["strings"][1][0]) * 8.0 / num_pixels
+        bpp = bpp_y + bpp_z
         return bpp, bpp_y, bpp_z
  
 
@@ -163,19 +163,11 @@ def compress_with_ac(model, test_dataloader, device,epoch):
     
 
 
-def plot_likelihood_baseline(net, device, epoch,n = 1000, dim = 0):
-    quantiles = torch.tensor([-20,0,20]).to(device)
-    quantiles = quantiles.repeat(net.M).reshape([net.M,1,3])
-    minimo = torch.min(quantiles[:,:,0]).item()
-    massimo = torch.max(quantiles[:,:,2]).item()
-    space = (massimo - minimo)/n
-    x_values = torch.arange(minimo, massimo, space)
-    sample = x_values.repeat(net.M, 1).unsqueeze(1).to(device) # [192,1,1000]
-    
-    y_values = net.entropy_bottleneck._likelihood(sample)[dim, :].squeeze(0) #[1000]
-    data = [[x, y] for (x, y) in zip(x_values,y_values)]
-    table = wandb.Table(data=data, columns = ["x", "p_y_" + str(epoch) + "_" + str(dim)])
-    wandb.log({'likelihood function at dimension ' + str(dim) + " epoch " + str(epoch): wandb.plot.line(table, "x", "p_y_" + str(epoch) + "_" + str(dim), title='likelihood function at dimension ' + str(dim) + " epoch " + str(epoch))})
+def plot_likelihood_baseline(net, device,n = 1000, dim = 0):
+    x_values = torch.arange(-30, 30 + 1)      
+    data = [[x, y] for (x, y) in zip(x_values,net.entropy_bottleneck.pmf[dim,:])]
+    table = wandb.Table(data=data, columns = ["x", "p_y"])
+    wandb.log({'likelihood/likelihood function at dimension ' + str(dim): wandb.plot.scatter(table, "x", "p_y" , title='likelihood function at dimension ' + str(dim))})
     
     
 """
@@ -189,9 +181,84 @@ def compute_and_plot_bitrate(probability, device, num_pixels, like_dim, epoch):
     wandb.log(log_dict) 
 """  
 
+def customize_quantize(x,b,delta):
+    return torch.sum(torch.sign(torch.relu(1 - (2/delta)*torch.abs(x - b[None,:,None].to(x.device))))*b[None,:,None].to(x.device), dim = 1).unsqueeze(1)
 
 
-def plot_latent_space_frequency(model, test_dataloader, device,epoch,dim = 0, test = True):
+def plot_likelihood(model,dim = 0): 
+    extrema = model.entropy_bottleneck.extrema
+    levels =model.entropy_bottleneck.levels
+    delta = model.entropy_bottleneck.delta
+    x_values = levels    
+    data = [[x, y] for (x, y) in zip(x_values,model.entropy_bottleneck.pmf[dim,:])]
+    table = wandb.Table(data=data, columns = ["x", "p_y"+ str(dim)])
+    wandb.log({"model probability dix at dimension" + str(dim): wandb.plot.scatter(table, "x", "p_y"+ str(dim), title="model probability dix at dimension" + str(dim))}) 
+            
+
+def plot_latent_space_frequency(model, test_dataloader, device, epoch = 0,dim = 0, test = True):
+        model.eval()
+        extrema = model.entropy_bottleneck.extrema
+        levels =model.entropy_bottleneck.levels
+        delta = model.entropy_bottleneck.delta
+        rng = torch.arange(-extrema, extrema + 1,delta)
+        if test is True:
+            res = torch.zeros((len(test_dataloader),rng.shape[0])).to(device)
+        else:
+            res = torch.zeros((1000,rng.shape[0])).to(device)
+        cont = 0
+        with torch.no_grad():
+            for i,d in enumerate(test_dataloader):
+                if i > 999 and test is False:
+                    break
+                cont = cont + 1
+                d = d.to(device)
+                out_enc = model.g_a(d) 
+                bs, ch, w,h = out_enc.shape
+
+                if delta == 1:
+                    out_enc = out_enc.round().int() #these dshould be the latent space
+                else:
+                    out_enc = out_enc.reshape(ch,bs,w*h) #192,1,w*h
+                    out_enc = customize_quantize(out_enc , levels,delta)
+                    out_enc = out_enc.reshape(bs,ch,w,h) 
+                out_enc = out_enc.reshape(bs,ch,w*h)
+                unique, val = torch.unique(out_enc[0,dim,:], return_counts = True)
+                dict_val =  dict(zip(unique.tolist(), val.tolist()))
+                cc = 0 
+                for j in rng:
+                    if j not in unique:
+                        res[i,cc]  = 0 
+                        cc = cc + 1
+                    else:
+                        res[i,cc] = dict_val[j]
+                        cc = cc +1
+      
+        res = torch.sum(res, dim = 0)
+        res = res.reshape(-1)
+        res = res/torch.sum(res)
+
+        if test is True:
+            x_values = torch.arange(-extrema, extrema + 1,delta)      
+            data = [[x, y] for (x, y) in zip(x_values,model.entropy_bottleneck.pmf[dim,:])]
+            table = wandb.Table(data=data, columns = ["x", "p_y"+ str(dim) + " " + str(epoch)])
+            wandb.log({"prova1/model probability dix at dimension" + str(dim) + " " + str(epoch): wandb.plot.scatter(table, "x", "p_y"+ str(dim) + " " + str(epoch), title="model probability dix at dimension" + str(dim) + " " + str(epoch))}) 
+            
+            x_values = torch.arange(-extrema, extrema + 1,delta)      
+            data = [[x, y] for (x, y) in zip(x_values,res)]
+            table = wandb.Table(data=data, columns = ["x", "p_y"+ str(dim) + " " + str(epoch)])
+            wandb.log({"prova2/test frequency statistics at dimension" + str(dim) + " " + str(epoch): wandb.plot.scatter(table, "x", "p_y"+ str(dim) + " " + str(epoch), title='test frequency statistics at dimension ' + str(dim) + " " + str(epoch))})         
+        else:
+            x_values = torch.arange(-extrema, extrema + 1)      
+            data = [[x, y] for (x, y) in zip(x_values,res)]
+            table = wandb.Table(data=data, columns = ["x", "p_y"+ str(dim) + " " + str(epoch)])
+            wandb.log({"train frequency statistics at dimension" + str(dim): wandb.plot.scatter(table, "x", "p_y"+ str(dim) + " " + str(epoch), title='train frequency statistics at dimension ' + str(dim))})   
+        return res
+             
+
+
+
+
+def counter_latent(model, test_dataloader, device,epoch,dim = 0, test = True):
         model.eval()
         extrema = model.entropy_bottleneck.extrema
         if test is True:
@@ -226,25 +293,10 @@ def plot_latent_space_frequency(model, test_dataloader, device,epoch,dim = 0, te
         res = res.reshape(-1)
         res = res/torch.sum(res)
 
-        if test is True:
-            x_values = torch.arange(-extrema, extrema + 1)      
-            data = [[x, y] for (x, y) in zip(x_values,model.entropy_bottleneck.pmf[dim,:])]
-            table = wandb.Table(data=data, columns = ["x", "p_y"+ str(dim) + " " + str(epoch)])
-            wandb.log({"model probability dix at dimension" + str(dim) + " " + str(epoch): wandb.plot.scatter(table, "x", "p_y"+ str(dim) + " " + str(epoch), title="model probability dix at dimension" + str(dim) + " " + str(epoch))}) 
-            
-            x_values = torch.arange(-extrema, extrema + 1)      
-            data = [[x, y] for (x, y) in zip(x_values,res)]
-            table = wandb.Table(data=data, columns = ["x", "p_y"+ str(dim) + " " + str(epoch)])
-            wandb.log({"test frequency statistics at dimension" + str(dim) + " " + str(epoch): wandb.plot.scatter(table, "x", "p_y"+ str(dim) + " " + str(epoch), title='test frequency statistics at dimension ' + str(dim) + " " + str(epoch))})         
-        else:
-            x_values = torch.arange(-extrema, extrema + 1)      
-            data = [[x, y] for (x, y) in zip(x_values,res)]
-            table = wandb.Table(data=data, columns = ["x", "p_y"+ str(dim) + " " + str(epoch)])
-            wandb.log({"train frequency statistics at dimension" + str(dim): wandb.plot.scatter(table, "x", "p_y"+ str(dim) + " " + str(epoch), title='train frequency statistics at dimension ' + str(dim))})   
-        return res
-             
-
-
+        x_values = torch.arange(-extrema, extrema + 1)      
+        data = [[x, y] for (x, y) in zip(x_values,res)]
+        table = wandb.Table(data=data, columns = ["x", "p_y"+ str(dim) + " " + str(epoch)])
+        wandb.log({"counter/test frequency statistics at dimension" + str(dim) + " " + str(epoch): wandb.plot.scatter(table, "x", "p_y"+ str(dim) + " " + str(epoch), title='test frequency statistics at dimension ' + str(dim) + " " + str(epoch))}) 
 
 def plot_hyperprior_latent_space_frequency(model, test_dataloader, device,dim = 0, test = True):
         model.eval()
@@ -263,7 +315,8 @@ def plot_hyperprior_latent_space_frequency(model, test_dataloader, device,dim = 
                 out_enc = model.g_a(d) 
                 out_enc = model.h_a(torch.abs(out_enc))
                 bs, ch, w,h = out_enc.shape
-                out_enc = out_enc.round().int() #these dshould be the latent space
+                out_enc = model.entropy_bottleneck.quantize(out_enc,False)
+                #out_enc = out_enc.round().int() #these dshould be the latent space
                 out_enc = out_enc.reshape(bs,ch,w*h)
                 unique, val = torch.unique(out_enc[0,dim,:], return_counts = True)
                 dict_val =  dict(zip(unique.tolist(), val.tolist()))
@@ -286,12 +339,12 @@ def plot_hyperprior_latent_space_frequency(model, test_dataloader, device,dim = 
             x_values = torch.arange(-extrema, extrema + 1)      
             data = [[x, y] for (x, y) in zip(x_values,model.entropy_bottleneck.pmf[dim,:])]
             table = wandb.Table(data=data, columns = ["x", "p_y"])
-            wandb.log({"model probability dix at dimension" + str(dim): wandb.plot.scatter(table, "x", "p_y", title='model probability at dimension ' + str(dim))}) 
+            wandb.log({"likelihood/likelihood function at dimension" + str(dim): wandb.plot.scatter(table, "x", "p_y", title='model probability at dimension ' + str(dim))}) 
             
             x_values = torch.arange(-extrema, extrema + 1)      
             data = [[x, y] for (x, y) in zip(x_values,res)]
             table = wandb.Table(data=data, columns = ["x", "p_y"])
-            wandb.log({"test frequency statistics at dimension" + str(dim): wandb.plot.scatter(table, "x", "p_y", title='test frequency statistics at dimension ' + str(dim))})         
+            wandb.log({"counter/test frequency statistics at dimension" + str(dim): wandb.plot.scatter(table, "x", "p_y", title='test frequency statistics at dimension ' + str(dim))})         
         else:
             x_values = torch.arange(-extrema, extrema + 1)      
             data = [[x, y] for (x, y) in zip(x_values,res)]
@@ -339,3 +392,6 @@ def compute_prob_distance(pmf1, pmf2, epoch,dim):
         "test":epoch,
         "test/pmf_distance_" + str(dim): r  }   
     wandb.log(log_dict)
+
+
+

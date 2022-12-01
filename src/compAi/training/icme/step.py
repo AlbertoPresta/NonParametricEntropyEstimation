@@ -41,13 +41,13 @@ def train_one_epoch( model, criterion, train_dataloader, optimizer,epoch,clip_ma
         counter += 1
         d = d.to(device)
         optimizer.zero_grad()
-        out_net = model(d) 
+        out_net = model(d, training = True) 
 
         #aux_loss = model.aux_loss()
         #aux_loss.backward()
         #aux_optimizer.step()
 
-        out_criterion = criterion(out_net, d)
+        out_criterion = criterion(out_net, d, ep = epoch)
         out_criterion["loss"].backward()
         
         if clip_max_norm > 0:
@@ -154,8 +154,7 @@ def test_epoch(epoch, test_dataloader, model, criterion  ):
  
 
             
-
-                
+          
 
 
     if i%1==0:

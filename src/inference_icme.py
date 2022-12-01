@@ -93,8 +93,8 @@ def main(config):
     
 
     import os 
-    print("-----------------------------> ",os.getwdr())
-    lista_df = [ ]
+    c = "/Users/albertopresta/Desktop/icme/files/plots"
+    lista_df = [os.path.join(c,j) for j in os.listdir(c)]
 
     loss_functions(lista_df)
 

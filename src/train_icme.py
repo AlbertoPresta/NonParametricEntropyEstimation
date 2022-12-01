@@ -12,7 +12,7 @@ import wandb
 import time
 from compAi.training.icme.loss import EntropyDistorsionLoss
 from compAi.training.icme.step  import train_one_epoch, test_epoch
-from compAi.training.icme.utility import CustomDataParallel, configure_optimizers, save_checkpoint,  plot_likelihood_baseline, plot_latent_space_frequency, plot_hyperprior_latent_space_frequency,compute_prob_distance, compress_with_ac
+from compAi.training.icme.utility import plot_likelihood, CustomDataParallel, configure_optimizers, save_checkpoint,  plot_likelihood_baseline, plot_latent_space_frequency, plot_hyperprior_latent_space_frequency,compute_prob_distance, compress_with_ac
 from compAi.models.icme import FactorizedICME, ICMEScaleHyperprior, ICMEMeanScaleHyperprior, ICMEJointAutoregressiveHierarchicalPriors
 from compAi.utils.parser import parse_args, ConfigParser
 import collections
@@ -88,6 +88,7 @@ def main(config):
     M = config["arch"]["M"]
     lmbda = config["cfg"]["trainer"]["lambda"]
     power = config["cfg"]["trainer"]["power"]
+    delta = config["cfg"]["trainer"]["delta"]
     mode = config["cfg"]["trainer"]["mode"]
     
     if model_name in "icme2023-factorized" and mode != "factorized":
@@ -95,7 +96,7 @@ def main(config):
     if "hype" in model_name and mode != "hyperprior":
         raise ValueError(f'check loss function')
     
-    net = image_models[model_name](N,M, power = power)
+    net = image_models[model_name](N,M, power = power, delta = delta)
 
     net = net.to(device)
     print("POWER: ",net.entropy_bottleneck.power)
@@ -123,7 +124,7 @@ def main(config):
     for epoch in range(last_epoch, config["cfg"]["trainer"]["epochs"]):
         start = time.time()
         print(f"Learning rate: {optimizer.param_groups[0]['lr']}")
-        counter= train_one_epoch(net, criterion, train_dataloader, optimizer, epoch, clip_max_norm, counter)
+        counter = train_one_epoch(net, criterion, train_dataloader, optimizer, epoch, clip_max_norm, counter)
         print("COUNTER: ",counter)
         # log on wandb train epoch result 
         
@@ -214,41 +215,27 @@ def main(config):
             )      
                  
         # plot sos curve 
-
-            #plot_likelihood_baseline(net, device, epoch)
-        #if epoch%1==0:
-        #    for ii in [2]:
-                #(net, device, epoch,dim = ii)
-               # res_test = plot_latent_space_frequency(net, test_dataloader, device,epoch,dim = ii, test = True)
-            
-        if epoch%25==0 :
-            for ii in [0,100,127]:
-                if config["arch"]["model"] == "icme2023-factorized":
-                    res_test = plot_latent_space_frequency(net, test_dataloader, device,0,dim = ii, test = True)
-                    res_train = plot_latent_space_frequency(net, train_dataloader_plot, device,0,dim = ii, test = False)
-                else:
-                    res_test = plot_hyperprior_latent_space_frequency(net, test_dataloader, device,dim = ii, test = True)
-                    res_train = plot_hyperprior_latent_space_frequency(net, train_dataloader_plot,device,dim = ii, test = False)   
-                             
-
-
-
-        """
-        if epoch == 200:
-            net.entropy_bottleneck.power = 10
-        elif epoch == 400: #
-            net.entropy_bottleneck.power = 20
-        """
+        if epoch%10==0:
+            for ii in range(128):
+                plot_likelihood(net, dim = ii)
+                #plot_likelihood_baseline(net, device, epoch, dim = ii)
+                #compress_with_ac(net, test_dataloader, device,epoch)
+                #plot_quantized_pmf(net, device, epoch)
+            #for ii in [0,55,67,99]:
+            #    plot_latent_space_frequency(net, test_dataloader, device,epoch,dim = ii, test = True)
+        
+                   
         end = time.time()
         print("Runtime of the epoch " + str(epoch) + " is: ", end - start)
     
-    for ii in range(M):
+    for ii in range(128):
         if config["arch"]["model"] == "icme2023-factorized":
-            res_test = plot_latent_space_frequency(net, test_dataloader, device,dim = ii, test = True)
-            res_train = plot_latent_space_frequency(net, train_dataloader_plot, device,dim = ii, test = False)
+            plot_likelihood(net, test_dataloader, device,dim = ii, test = True)
+            #res_test = plot_latent_space_frequency(net, test_dataloader, device,dim = ii, test = True)
+            #res_train = plot_latent_space_frequency(net, train_dataloader_plot, device,dim = ii, test = False)
         else:
             res_test = plot_hyperprior_latent_space_frequency(net, test_dataloader, device,1000,dim = ii, test = True)
-            res_train = plot_hyperprior_latent_space_frequency(net, train_dataloader_plot, device,1000,dim = ii, test = False)   
+            #res_train = plot_hyperprior_latent_space_frequency(net, train_dataloader_plot, device,1000,dim = ii, test = False)   
     
 
 if __name__ == "__main__":
@@ -271,7 +258,7 @@ if __name__ == "__main__":
 
     ]
     
-    wandb.init(project="meanscalehyperprior_icme", entity="albertopresta")
+    wandb.init(project="scale_trial", entity="albertopresta")
     config = ConfigParser.from_args(args, wandb.run.name, options)
     wandb.config.update(config._config)
     main(config)

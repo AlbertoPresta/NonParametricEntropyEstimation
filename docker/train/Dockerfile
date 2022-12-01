@@ -15,4 +15,4 @@ COPY src /src
 RUN chmod 775 /src
 RUN chown -R :1337 /src
 
-ENTRYPOINT [ "python3"]
+ENTRYPOINT [ "wandb","agent"]

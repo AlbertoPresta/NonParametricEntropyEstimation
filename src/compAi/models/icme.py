@@ -43,11 +43,11 @@ class CompressionModel(nn.Module):
             bottleneck
     """
 
-    def __init__(self, entropy_bottleneck_channels = 192, extrema = 30, power = 1):
+    def __init__(self, entropy_bottleneck_channels = 192, extrema = 30, power = 1, delta = 1):
         super().__init__()
         
         
-        self.entropy_bottleneck = EntropyBottleneck(entropy_bottleneck_channels, extrema = extrema, power = power)
+        self.entropy_bottleneck = EntropyBottleneck(entropy_bottleneck_channels, extrema = extrema, power = power, delta = delta)
 
 
     def aux_loss(self):
@@ -162,9 +162,9 @@ class FactorizedICME(CompressionModel):
         print("shape of statistical res is: ",res.shape)
         self.entropy_bottleneck.stat_pmf = res   
     
-    def forward(self, x):
+    def forward(self, x, training = False):
         y = self.g_a(x)
-        y_hat, y_likelihoods, y_probability = self.entropy_bottleneck(y)
+        y_hat, y_likelihoods, y_probability = self.entropy_bottleneck(y,training)
         x_hat = self.g_s(y_hat)
 
         return {
@@ -222,8 +222,8 @@ class ICMEScaleHyperprior(CompressionModel):
     """
     """
 
-    def __init__(self, N, M,extrema = 30, **kwargs):
-        super().__init__(entropy_bottleneck_channels = N,extrema = extrema, **kwargs)
+    def __init__(self, N, M,extrema = 30, power = 1, delta = 1, **kwargs):
+        super().__init__(entropy_bottleneck_channels = N,extrema = extrema, power = power, delta = delta, **kwargs)
 
         
         self.g_a = nn.Sequential(
@@ -268,6 +268,8 @@ class ICMEScaleHyperprior(CompressionModel):
         self.M = int(M)
         self.extrema = extrema   
         self.stat_pmf = None
+        self.delta = delta
+        self.power = power
 
 
 
@@ -306,13 +308,13 @@ class ICMEScaleHyperprior(CompressionModel):
 
 
 
-    def forward(self, x):
+    def forward(self, x, training = False):
         y = self.g_a(x)
         z = self.h_a(torch.abs(y))
 
-        z_hat, z_likelihoods , z_probability= self.entropy_bottleneck(z)
+        z_hat, z_likelihoods , z_probability= self.entropy_bottleneck(z, training)
         scales_hat = self.h_s(z_hat)
-        y_hat, y_likelihoods = self.gaussian_conditional(y, scales_hat)
+        y_hat, y_likelihoods = self.gaussian_conditional(y, scales_hat, training = training)
         x_hat = self.g_s(y_hat)
 
         return {
@@ -510,13 +512,13 @@ class ICMEJointAutoregressiveHierarchicalPriors(ICMEScaleHyperprior):
     def downsampling_factor(self) -> int:
         return 2 ** (4 + 2)
 
-    def forward(self, x):
+    def forward(self, x, training = False):
         y = self.g_a(x)
         z = self.h_a(y)
-        z_hat, z_likelihoods, probability = self.entropy_bottleneck(z) 
+        z_hat, z_likelihoods, probability = self.entropy_bottleneck(z, training) 
         params = self.h_s(z_hat)
         # check if self.training combacia 
-        y_hat = self.gaussian_conditional.quantize(y,self.training)
+        y_hat = self.gaussian_conditional.quantize(y,training)
         #y_hat = self.gaussian_conditional.quantize(y, "noise" if self.training else "dequantize") # cambiare 
         ctx_params = self.context_prediction(y_hat)
         gaussian_params = self.entropy_parameters(torch.cat((params, ctx_params), dim=1))

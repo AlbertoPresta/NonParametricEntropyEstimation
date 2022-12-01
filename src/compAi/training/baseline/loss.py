@@ -3,6 +3,7 @@ import torch
 import math
 
 
+
 class RateDistortionLoss(nn.Module):
     """Custom rate distortion loss with a Lagrangian parameter."""
 

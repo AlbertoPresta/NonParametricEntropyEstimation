@@ -79,12 +79,13 @@ class EntropyModel(nn.Module):
 
     def __init__(
         self,
+        delta,
         likelihood_bound: float = 1e-9,
         entropy_coder: Optional[str] = None,
         entropy_coder_precision: int = 16,
     ):
         super().__init__()
-
+        self.delta = delta
         if entropy_coder is None:
             entropy_coder = default_entropy_coder()
         self.entropy_coder = _EntropyCoder(entropy_coder)
@@ -126,20 +127,31 @@ class EntropyModel(nn.Module):
     def quantize(self, inputs, training,  means = None):
 
         if training:
-            half = float(0.5)
+            half = float((self.delta/2))
             noise = torch.empty_like(inputs).uniform_(-half, half)
             inputs = inputs + noise
+            
             return inputs
-        outputs = inputs.clone()
-        
-        if means is not None:
-            print("means is not none")
-            outputs -= means
-        outputs = torch.round(outputs)        
+        else:
+            outputs = inputs.clone()
+            
+            if means is not None:
+                print("means is not none")
+                outputs -= means
+                
+            if self.delta == 1: # on integers
+                
+                outputs = torch.round(outputs)   
+            else:
+                outputs = self.customize_quantize(outputs)  
+            return outputs
 
-        return outputs
 
-
+    
+    def customize_quantize(self,x):
+        b = self.levels 
+        #torch.sum(torch.sign(torch.relu(1 - (2/self.delta)*torch.abs(x - b[:,None])))*b[:,None], dim = 0)
+        return torch.sum(torch.sign(torch.relu(1 - (2/self.delta)*torch.abs(x - b[None,:,None].to(x.device))))*b[None,:,None].to(x.device), dim = 1).unsqueeze(1)
 
     def transform_map(self,x,map_float_to_int):
         if x in map_float_to_int.keys():
@@ -195,7 +207,11 @@ class EntropyModel(nn.Module):
             raise ValueError(f"Invalid offsets size {self._cdf_length.size()}")
     
     def compress_during_training(self, inputs, indexes, means = None):
+        bs,ch,w,h = inputs.shape 
+        inputs = inputs.reshape(ch,1,bs*w*h)
+         
         symbols = self.quantize(inputs, False, means = means)
+        symbols = symbols.reshape(bs,ch,w,h)
         strings = []
         for i in range(symbols.size(0)):
             rv = self.entropy_coder.encode_with_indexes(
@@ -242,12 +258,13 @@ class  EntropyBottleneck(EntropyModel):
         channels: int,
         *args: Any,
         tail_mass: float = 1e-9,
-        extrema: int = 60,
+        extrema: int = 30,
         init_scale: float = 10,
         power = 1,
+        delta = 1,
         **kwargs: Any,
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__(delta,*args, **kwargs)
 
         self.channels = int(channels)
         self.init_scale = float(init_scale)
@@ -256,9 +273,9 @@ class  EntropyBottleneck(EntropyModel):
         self.power = power
         self.pmf = None
         self.epsilon = 1e-7
-
+        self.delta = delta
         self.extrema = extrema
-        self.levels = torch.arange(-self.extrema, self.extrema + 1)
+        self.levels = torch.arange(-self.extrema, self.extrema + self.delta, self.delta)
         self.build_maps()
 
     def _get_medians(self):
@@ -315,10 +332,9 @@ class  EntropyBottleneck(EntropyModel):
     def _likelihood(self, x):
 
         d = torch.abs(x - self.levels[:,None].to(x.device))
-        d = 2*d
+        d = (2/self.delta)*d
         d = torch.pow(d + self.epsilon, self.power)
-        dist = torch.relu(1 - d)        
- 
+        dist = torch.relu(1 - d)            
         #dist = torch.relu(1 - (2**self.power)*torch.abs((x - self.levels[:,None].to(x.device))**self.power))
         pmf = self.pmf[:,:,None].to(x.device)
         likelihood = (pmf + self.epsilon)*dist #[192,NL,8291]
@@ -338,11 +354,10 @@ class  EntropyBottleneck(EntropyModel):
         """           
 
         d = torch.abs(x - self.levels[:,None].to(x.device))
-        d = 2*d
+        d = (2/self.delta)*d
         d = torch.pow(d + self.epsilon, self.power)
         d = torch.relu(1 - d)                
         #d = torch.relu(1 - (2**self.power)*torch.pow(torch.abs((x - self.levels[:,None].to(x.device))),self.power))  #[192,NL,8192]  
-
         #d = torch.relu(torch.exp(-(x - self.sos.cum_w[:,None].to(x.device))**2) - 0.01)
         y_sum = torch.sum(d,dim = 2) #[NC,NL]
         y = torch.sum(y_sum,dim = 1) #[NC,1]
@@ -357,9 +372,8 @@ class  EntropyBottleneck(EntropyModel):
         return y
       
 
-    def forward(self, x: Tensor, training: Optional[bool] = None):
-        if training is None:
-            training = self.training
+    def forward(self, x: Tensor, training):
+
 
 
         # x from B x C x ... to C x B x ...
@@ -374,15 +388,13 @@ class  EntropyBottleneck(EntropyModel):
         # Add noise or quantize
 
         outputs = self.quantize(values,training)
-
-
         if not torch.jit.is_scripting():
             probability = self._probability(outputs) 
             probability = self.likelihood_lower_bound(probability)
             if training:
                 self.pmf = probability # update pmf only when training
                 self.stat_pmf = probability
-                v = self.quantize(values,False)
+                v = self.quantize(values,training)
                 likelihood = self._likelihood(v)
             else:
                 likelihood = self._likelihood(outputs)            
@@ -480,8 +492,7 @@ class GaussianConditional(EntropyModel):
         tail_mass: float = 1e-9,
         **kwargs: Any,
     ):
-        super().__init__(*args, **kwargs)
-
+        super().__init__(1,*args, **kwargs)
 
         self.tail_mass = float(tail_mass)
         if scale_bound is None and scale_table:
@@ -563,9 +574,8 @@ class GaussianConditional(EntropyModel):
         likelihood = upper - lower
         return likelihood
 
-    def forward(self, inputs, scales, means = None,training = None ):
-        if training is None:
-            training = self.training
+    def forward(self, inputs, scales, means = None,training = False):
+
         outputs = self.quantize(inputs, training, means = means)
         likelihood = self._likelihood(outputs, scales, means)
         if self.use_likelihood_bound:
