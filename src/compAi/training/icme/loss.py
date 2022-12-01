@@ -45,7 +45,7 @@ class EntropyDistorsionLoss(nn.Module):
             if ep <=-1:
                 out["loss"] =  self.lmbda * 255**2 * out["mse_loss"]  + bpp_loss_gauss
             else:
-                out["loss"] =  self.lmbda * 255**2 * out["mse_loss"]    + bpp_loss_gauss + 0.05*out["entropy"] 
+                out["loss"] =  self.lmbda * 255**2 * out["mse_loss"]    + bpp_loss_gauss + 0.1*out["entropy"] 
             out["bpp_gauss"] = bpp_loss_gauss
             out["bpp_hype"] = bpp_loss_hype
 
