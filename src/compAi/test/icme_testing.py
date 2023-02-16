@@ -31,9 +31,83 @@ model_architectures= {
 }
 
 
-def bpp_calculation(out_net, out_enc):
+
+def plot_total_diagram(pth,
+                       bpp_icme, 
+                       psnr_icme,
+                       mssim_icme, 
+                       bpp_base, 
+                       psnr_base, 
+                       mssim_base):
+    
+    fig, axes = plt.subplots(1, 2, figsize=(18, 6))
+    #plt.figtext(.5, 0., '()', fontsize=12, ha='center')
+   
+    axes[0].plot(bpp_base["factorized"],psnr_base["factorized"],'-',color = 'b', label = "factorized_base")
+    axes[0].plot(bpp_base["factorized"], psnr_base["factorized"],'o',color = 'b')
+
+    axes[0].plot(bpp_icme["factorized"], psnr_icme["factorized"],'-',color = 'r', label = "factorized_icme")
+    axes[0].plot(bpp_icme["factorized"], psnr_icme["factorized"],'o',color = 'r')
+
+
+    axes[0].plot(bpp_base["hyperprior"],psnr_base["hyperprior"],'-',color = 'm', label = "hyperprior_base")
+    axes[0].plot(bpp_base["hyperprior"], psnr_base["hyperprior"],'o',color = 'm')
+
+    axes[0].plot(bpp_icme["hyperprior"], psnr_icme["hyperprior"],'-',color = 'c', label = "hyperprior_icme")
+    axes[0].plot(bpp_icme["hyperprior"], psnr_icme["hyperprior"],'o',color = 'c')
+
+
+
+
+    axes[0].plot(bpp_base["joint"],psnr_base["joint"],'-',color = 'g', label = "joint_base")
+    axes[0].plot(bpp_base["joint"], psnr_base["joint"],'o',color = 'g')
+
+    axes[0].plot(bpp_icme["joint"], psnr_icme["joint"],'-',color = 'y', label = "joint_icme")
+    axes[0].plot(bpp_icme["joint"], psnr_icme["joint"],'o',color = 'y')
+    
+    
+    axes[0].set_ylabel('PSNR [dB]')
+    axes[0].set_xlabel('Bit-rate [bpp]')
+    axes[0].title.set_text('PSNR comparison')
+    axes[0].grid()
+    axes[0].legend(loc='best')
+        
+    axes[1].plot(bpp_base["factorized"],mssim_base["factorized"],'-',color = 'b', label = "factorized_base")
+    axes[1].plot(bpp_base["factorized"], mssim_base["factorized"],'o',color = 'b')
+
+    axes[1].plot(bpp_icme["factorized"], mssim_icme["factorized"],'-',color = 'r', label = "factorized_icme")
+    axes[1].plot(bpp_icme["factorized"], mssim_icme["factorized"],'o',color = 'r')
+
+    axes[1].plot(bpp_base["hyperprior"],mssim_base["hyperprior"],'-',color = 'm', label = "hyperprior_base")
+    axes[1].plot(bpp_base["hyperprior"], mssim_base["hyperprior"],'o',color = 'm')
+
+    axes[1].plot(bpp_icme["hyperprior"], mssim_icme["hyperprior"],'-',color = 'c', label = "hyperprior_icme")
+    axes[1].plot(bpp_icme["hyperprior"], mssim_icme["hyperprior"],'o',color = 'c')
+
+
+    axes[1].plot(bpp_base["joint"],mssim_base["joint"],'-',color = 'g', label = "joint_base")
+    axes[1].plot(bpp_base["joint"], mssim_base["joint"],'o',color = 'g')
+
+    axes[1].plot(bpp_icme["joint"], mssim_icme["joint"],'-',color = 'y', label = "joint_icme")
+    axes[1].plot(bpp_icme["joint"], mssim_icme["joint"],'o',color = 'y')
+    
+     
+    axes[1].set_ylabel('MS-SSIM [dB]')
+    axes[1].set_xlabel('Bit-rate [bpp]')
+    axes[1].title.set_text('MS-SSIM (log) comparison')
+    axes[1].grid()
+    axes[1].legend(loc='best') 
+    
+    for ax in axes:
+        ax.grid(True) 
+    plt.savefig(pth + "total.pdf")
+    plt.close()     
+    print("ma arrivo qua ")
+
+def bpp_calculation(out_net, out_enc, icme = False):
         size = out_net['x_hat'].size() 
         num_pixels = size[0] * size[2] * size[3]
+
         bpp = sum(len(s[0]) for s in out_enc["strings"]) * 8.0 / num_pixels
         return bpp
 
@@ -180,7 +254,7 @@ def inference_with_arithmetic_codec(model, test_dataloader, device,  type_model)
             d = d.to(device) 
             start_all = time.time()
             
-            bpp_list, probability = compute_per_channel_bpp(model, d, type_model)  
+            probability = extract_probability(model,  type_model)  
             if "icme" not in type_model:  
                 out_enc = model.compress(d) # bit_stream is the compressed, output_cdf needs for decoding 
                 enc_comp = time.time() - start_all
@@ -190,7 +264,7 @@ def inference_with_arithmetic_codec(model, test_dataloader, device,  type_model)
                 timing_dec.update(time.time() - start)
                 timing_all.update(time.time() - start_all)
             else:
-                out_enc = model.compress_during_training(d, device = device) # bit_stream is the compressed, output_cdf needs for decoding 
+                out_enc  = model.compress_during_training(d, device = device) # bit_stream is the compressed, output_cdf needs for decoding 
                 enc_comp = time.time() - start_all
                 timing_enc.update(enc_comp)
                 start = time.time()  
@@ -198,7 +272,7 @@ def inference_with_arithmetic_codec(model, test_dataloader, device,  type_model)
                 timing_dec.update(time.time() - start)
                 timing_all.update(time.time() - start_all)               
 
-            bpp= bpp_calculation(out_dec, out_enc)
+            bpp= bpp_calculation(out_dec, out_enc, icme = True)
             bpp_loss.update(bpp)
             psnr.update(compute_psnr(d, out_dec["x_hat"]))
             mssim.update(compute_msssim(d, out_dec["x_hat"]))  
@@ -218,10 +292,9 @@ def inference_with_arithmetic_codec(model, test_dataloader, device,  type_model)
                     somma = torch.sum(b).item()
                     b = (b/somma)
                 
-                    if "icme" in type_model:
-                        data_dic = create_dictionary(a,b)
-                    else:
-                        data_dic = create_dictionary(a,b)
+
+                    data_dic = create_dictionary(a,b)
+
                 
                     pmf = probability[j]
                     l = int(pmf.shape[0]/2)
@@ -339,6 +412,34 @@ def loss_functions(lista_df):
 ######################################################################################
 
 
+def compute_pmf(net, dataloader,device): # basically useless 
+
+    res = torch.zeros(net.M, net.entropy_bottleneck.levels.shape[0]).to(device)
+    # calculate the pmf using training dataloader
+    cc = 0
+    with torch.no_grad():
+        print("entro qua")
+        for i,d in enumerate(dataloader):
+            if i<100:
+
+                    
+                cc += 1
+                d = d.to(device)
+                x = net.g_a(d)
+                bs,ch,w,h = x.shape  
+                x = x.reshape(ch,bs,w*h)                       
+                outputs = net.entropy_bottleneck.quantize(x,  False)
+                prob = net.entropy_bottleneck._probability(outputs)
+
+                res += prob
+            else:
+                break
+
+        res = res/cc
+        return  res
+            
+
+
 def compress_and_reconstruct_single_image(model,model_name, path_images, image_name,save_path, type_model, bpp_channels = True):
     """
     Args:
@@ -443,7 +544,7 @@ def compress_and_reconstruct_single_image(model,model_name, path_images, image_n
                 
                 pmf = probability[i]
                 l = int(pmf.shape[0]/2)
-                pmf_dic = dict(zip(np.arange(-l,l + 1),list(pmf.numpy())))
+                pmf_dic = dict(zip(np.arange(-l,l + 1),list(pmf.detach().numpy())))
                 
                 if not exists(join(save_path_image,"latent_space",model_name)):
                     makedirs(join(save_path_image,"latent_space",model_name))
@@ -535,6 +636,7 @@ def load_pretrained_baseline(architecture, path,device = torch.device("cpu")):
 
 def from_state_dict(arch, state_dict):
     """Return a new model instance from `state_dict`."""
+
     N = state_dict["g_a.0.weight"].size(0)
     M = state_dict["g_a.6.weight"].size(0)
     if "icme" in arch:
@@ -587,6 +689,9 @@ def plot_diagram_and_images(models_path,
         model_name = f.split(".")[0] #factorizedICME_0018
         model = load_model(models_path, model_name, type_model, device = device)
         
+        if "icme" in type_model and dataloader is not None:
+            model.entropy_bottleneck.pmf = compute_pmf(model, dataloader, device)
+            print("esco di quaaaaaa")
         
         # compress the image
         bpp, mssim_val, psnr_val, js_val= compress_and_reconstruct_single_image(model, 
@@ -675,16 +780,22 @@ def plot_diagram_and_images(models_path,
     
 
 
+def extract_probability(net, type):
+    if "icme" in type:
+        return net.entropy_bottleneck.pmf
+    else:
+        return extract_pmf_from_baseline(net)
+
 
 def compute_per_channel_bpp(net, x, type):
     num_pixels = x.size(2) * x.size(3)
     with torch.no_grad():
         y = net.g_a(x)
         if "icme" in type:
-            y_hat, y_likelihoods, probability = net.entropy_bottleneck(y)
-
+            y_hat, y_likelihoods, _ = net.entropy_bottleneck(y, False)
+            probability = net.entropy_bottleneck.pmf
         else:
-            y_hat, y_likelihoods = net.entropy_bottleneck(y)
+            y_hat, y_likelihoods = net.entropy_bottleneck(y, False)
             probability= extract_pmf_from_baseline(net)
         
     channel_bpps = [torch.log(y_likelihoods[0, c]).sum().item() / (-math.log(2) * num_pixels)for c in range(y.size(1))]

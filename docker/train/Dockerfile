@@ -12,6 +12,7 @@ COPY src /src
 
 
 
+
 RUN chmod 775 /src
 RUN chown -R :1337 /src
 

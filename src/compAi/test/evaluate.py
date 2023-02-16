@@ -308,7 +308,9 @@ def build_csv_dictionary(path_list):
         for st in df.columns:    
             if "-" in st:
                 df.columns = df.columns.str.replace(st,st.split("-")[1][6:].split("_")[0])
-
+        print(list(df.columns))
+        if "ssim" in list(df.columns):
+            df.rename(columns = {'ssim':'mssim'}, inplace = True)
         for c in list(df.columns):
             mean_value=df[c].mean()
             df[c].fillna(value=mean_value, inplace=True)

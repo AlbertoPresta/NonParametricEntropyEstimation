@@ -13,18 +13,18 @@ import time
 from compAi.training.icme.loss import EntropyDistorsionLoss
 from compAi.training.icme.step  import train_one_epoch, test_epoch
 from compAi.training.icme.utility import plot_likelihood, CustomDataParallel, configure_optimizers, save_checkpoint,  plot_likelihood_baseline, plot_latent_space_frequency, plot_hyperprior_latent_space_frequency,compute_prob_distance, compress_with_ac
-from compAi.models.icme import FactorizedICME, ICMEScaleHyperprior, ICMEMeanScaleHyperprior, ICMEJointAutoregressiveHierarchicalPriors
+from compAi.models.icme import FactorizedICME, ICMEScaleHyperprior, ICMEMeanScaleHyperprior, ICMEJointAutoregressiveHierarchicalPriors, ICMECheng2020Attention
 from compAi.utils.parser import parse_args, ConfigParser
 import collections
 
 
 
 image_models = {
-    "bmshj2018-factorized": bmshj2018_factorized,
     "icme2023-factorized": FactorizedICME,
     "icme2023-hyperprior": ICMEScaleHyperprior,
     "icme2023-meanscalehyperprior": ICMEMeanScaleHyperprior,
-    "icme2023-jointAutoregressive":ICMEJointAutoregressiveHierarchicalPriors
+    "icme2023-jointAutoregressive":ICMEJointAutoregressiveHierarchicalPriors,
+    "icme2023-chengattn":ICMECheng2020Attention
 
 }
 
@@ -84,9 +84,12 @@ def main(config):
     )
     
     model_name = config["arch"]["model"]
+    
+    print(model_name)
     N = config["arch"]["N"]
     M = config["arch"]["M"]
     lmbda = config["cfg"]["trainer"]["lambda"]
+    wgh = config["cfg"]["trainer"]["weight"]
     power = config["cfg"]["trainer"]["power"]
     delta = config["cfg"]["trainer"]["delta"]
     mode = config["cfg"]["trainer"]["mode"]
@@ -96,7 +99,11 @@ def main(config):
     if "hype" in model_name and mode != "hyperprior":
         raise ValueError(f'check loss function')
     
-    net = image_models[model_name](N,M, power = power, delta = delta)
+    
+    if "chen" in model_name:
+        net = image_models[model_name](N = 192)
+    else: 
+        net = image_models[model_name](N,M, power = power, delta = delta)
 
     net = net.to(device)
     print("POWER: ",net.entropy_bottleneck.power)
@@ -107,7 +114,7 @@ def main(config):
     lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min", patience = 20, factor = 0.5)
     
 
-    criterion = EntropyDistorsionLoss(lmbda= lmbda, mode = mode)
+    criterion = EntropyDistorsionLoss(lmbda= lmbda, mode = mode, wgh = wgh)
 
     print("lambda is ",config["cfg"]["trainer"]["lambda"])
     last_epoch = 0
@@ -127,10 +134,10 @@ def main(config):
         counter = train_one_epoch(net, criterion, train_dataloader, optimizer, epoch, clip_max_norm, counter)
         print("COUNTER: ",counter)
         # log on wandb train epoch result 
-        
-        print("calculate statistical probability model")
-        if  epoch>=798: 
-            net.define_statistical_pmf(train_dataloader_plot, idx = 1000)
+ 
+        #print("calculate statistical probability model")
+        #if  epoch == 0 or epoch>=598: 
+        #    net.define_statistical_pmf(train_dataloader_plot, idx = 1000)
 
         print("end calculating")
         loss, loss_bpp = test_epoch(epoch,test_dataloader,net, criterion)
@@ -142,6 +149,7 @@ def main(config):
 
         #bpp_ac = compress_with_ac(net,test_dataloader, device ,epoch)
         print("time needen for ac to encode and decode is ",time.time() - start_enc)
+
 
         is_best = loss < best_loss
         #trigger = best_bpp > bpp_ac
@@ -192,7 +200,7 @@ def main(config):
                 filename_best
             ) 
         """
-        if epoch%25==0 or epoch == 799:
+        if epoch%25==0 or epoch == 9:
             filename = config["saving"]["filename"] + "epoch" + str(epoch) + str(config["cfg"]["trainer"]["lambda"]) + "bpp" + config["saving"]["suffix"] 
             filename_best = config["saving"]["filename"] + "epoch" + str(epoch) +  str(config["cfg"]["trainer"]["lambda"]) + "bpp" + "_best" +  config["saving"]["suffix"]
         
@@ -214,10 +222,16 @@ def main(config):
                 filename_best
             )      
                  
+                 
+                 
+        
+        
+        
         # plot sos curve 
-        if epoch%10==0:
-            for ii in range(128):
-                plot_likelihood(net, dim = ii)
+        
+        #if epoch%1000==0:
+        #    for ii in range(128):
+        #        plot_likelihood(net, dim = ii)
                 #plot_likelihood_baseline(net, device, epoch, dim = ii)
                 #compress_with_ac(net, test_dataloader, device,epoch)
                 #plot_quantized_pmf(net, device, epoch)
@@ -227,7 +241,7 @@ def main(config):
                    
         end = time.time()
         print("Runtime of the epoch " + str(epoch) + " is: ", end - start)
-    
+    """
     for ii in range(128):
         if config["arch"]["model"] == "icme2023-factorized":
             plot_likelihood(net, test_dataloader, device,dim = ii, test = True)
@@ -236,7 +250,7 @@ def main(config):
         else:
             res_test = plot_hyperprior_latent_space_frequency(net, test_dataloader, device,1000,dim = ii, test = True)
             #res_train = plot_hyperprior_latent_space_frequency(net, train_dataloader_plot, device,1000,dim = ii, test = False)   
-    
+    """
 
 if __name__ == "__main__":
     args = argparse.ArgumentParser(description='PyTorch Template')
@@ -253,12 +267,13 @@ if __name__ == "__main__":
     options = [
         CustomArgs(['--ql', '--quality'], type=int, target='arch;quality'),
          CustomArgs(['--lmb', '--lambda'], type=float, target='cfg;trainer;lambda'),
+         CustomArgs(['--wgh', '--weight'], type=float, target='cfg;trainer;weight'),
         CustomArgs(['--pw', '--power'], type=float, target='cfg;trainer;power')
 
 
     ]
     
-    wandb.init(project="scale_trial", entity="albertopresta")
+    wandb.init(project="hyperprior_icme", entity="albertopresta")
     config = ConfigParser.from_args(args, wandb.run.name, options)
     wandb.config.update(config._config)
     main(config)

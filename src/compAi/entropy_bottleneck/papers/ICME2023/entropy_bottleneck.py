@@ -124,26 +124,27 @@ class EntropyModel(nn.Module):
     # See: https://github.com/python/mypy/issues/8795
     forward: Callable[..., Any] = _forward
 
-    def quantize(self, inputs, training,  means = None):
+    def quantize(self, inputs, training,  means = None, comp = False):
 
         if training:
             half = float((self.delta/2))
             noise = torch.empty_like(inputs).uniform_(-half, half)
-            inputs = inputs + noise
-            
+            inputs = inputs + noise           
             return inputs
         else:
-            outputs = inputs.clone()
-            
+            outputs = inputs.clone()           
             if means is not None:
-                print("means is not none")
                 outputs -= means
-                
-            if self.delta == 1: # on integers
-                
-                outputs = torch.round(outputs)   
-            else:
-                outputs = self.customize_quantize(outputs)  
+            
+            
+            if self.delta == 1:
+                outputs = torch.round(outputs)  
+            else: 
+                outputs = self.customize_quantize(outputs)
+            
+            if means is not None and comp is False:
+                outputs += means
+                             
             return outputs
 
 
@@ -166,7 +167,6 @@ class EntropyModel(nn.Module):
     
     def dequantize(self,inputs,dtype = torch.float, means = None):
         if means is not None:
-
             outputs = inputs.type_as(means)
             outputs += means
         else:
@@ -265,7 +265,7 @@ class  EntropyBottleneck(EntropyModel):
         **kwargs: Any,
     ):
         super().__init__(delta,*args, **kwargs)
-
+        self.delta = delta
         self.channels = int(channels)
         self.init_scale = float(init_scale)
         self.tail_mass = float(tail_mass)
@@ -273,7 +273,6 @@ class  EntropyBottleneck(EntropyModel):
         self.power = power
         self.pmf = None
         self.epsilon = 1e-7
-        self.delta = delta
         self.extrema = extrema
         self.levels = torch.arange(-self.extrema, self.extrema + self.delta, self.delta)
         self.build_maps()
@@ -373,9 +372,7 @@ class  EntropyBottleneck(EntropyModel):
       
 
     def forward(self, x: Tensor, training):
-
-
-
+        #self.levels = torch.arange(-self.extrema, self.extrema + self.delta.item(), self.delta.item())
         # x from B x C x ... to C x B x ...
         perm = np.arange(len(x.shape))
         perm[0], perm[1] = perm[1], perm[0]
@@ -393,11 +390,18 @@ class  EntropyBottleneck(EntropyModel):
             probability = self.likelihood_lower_bound(probability)
             if training:
                 self.pmf = probability # update pmf only when training
+                #likelihood = self.compute_rate(outputs)
+                likelihood = self._likelihood(outputs)
+                #pr = self.likelihood_lower_bound(pr)
+
                 self.stat_pmf = probability
-                v = self.quantize(values,training)
-                likelihood = self._likelihood(v)
+                #v = self.quantize(values,training)
+                #likelihood = self._likelihood(outputs)
+                #likelihood = pr
             else:
-                likelihood = self._likelihood(outputs)            
+                
+                likelihood = self._likelihood(outputs)   
+                #likelihood = self.compute_rate(outputs)         
             if self.use_likelihood_bound:
                 likelihood = self.likelihood_lower_bound(likelihood)
                 
@@ -435,10 +439,58 @@ class  EntropyBottleneck(EntropyModel):
 
     
     
+    def compute_rate(self,inputs):
+
+        a,_,b = inputs.shape
+        inputs = inputs.reshape(-1).to(inputs.device)
+        inputs = inputs.unsqueeze(1).to(inputs.device)
+        ap = self.levels.to(inputs.device)
+        apl = torch.zeros(ap.shape[0] + 1).to(ap.device) - ap[0] - self.delta # [l + 1]
+        apl[1:] = ap 
+        apr = torch.zeros(ap.shape[0] + 1).to(ap.device) + ap[-1] + self.delta # [l + 1]
+        apr[:-1] = ap  
+        
+        li = inputs < apr  
+        ri = inputs >= apl
+        
+        one_hot_level = torch.logical_and(li,ri).to(inputs.device)    # [190000,level + 1]
+        
+        one_hot_level = one_hot_level.reshape(a,b,-1) #[192,100,l +1]
+        one_hot_level = torch.permute(one_hot_level, (0,2,1)) # [192,l+1,100]
+        
+        pmf_l = torch.zeros(self.pmf.shape[0],self.pmf.shape[1] + 1).to(inputs.device)
+        pmf_l[:,1:] = self.pmf
+        #pmf_l = pmf_l.repeat(192).reshape(192,-1).to(inputs.device) #[192,l+1]
+
+        pmf_r = torch.zeros(self.pmf.shape[0],self.pmf.shape[1] + 1).to(inputs.device)
+        pmf_r[:,:-1] = self.pmf
+        #pmf_r = pmf_r.repeat(192).reshape(192,-1).to(inputs.device) #[192,l+1]  
+        
+        inputs = inputs.reshape(a,1,b) #[192,1,100]
+        p_x = (inputs - apl[:,None])/(apr[:,None] - apl[:,None])
+        p_x = p_x*(pmf_r[:,:,None] - pmf_l[:,:,None]) + pmf_l[:,:,None] #[192,L+1, 100]
+        
+        p_x = torch.relu(p_x)
+        p_x = p_x*one_hot_level
+        p_x = torch.sum(p_x,dim = 1).unsqueeze(1) #[192,1,100]
+        return p_x
+        
+        
+        
+              
+        
+        
+        
+        
+        
+    
+    
     def compress(self, x,means = None):
 
         x = self.quantize(x, False, means = means) 
+        print("primo controllo: ",torch.unique(x, return_counts = True))
         x = x.detach().apply_(lambda x: self.transform_map(x, self.float_to_int))  
+        print("secondo controllo: ",torch.unique(x, return_counts = True))
         symbols = x #[1,192,32,48]
         M = symbols.size(1)        
         symbols = symbols.to(torch.int16)
@@ -448,7 +500,9 @@ class  EntropyBottleneck(EntropyModel):
             output_cdf[:,i,:,:,:] = self.cdf[i,:]      
         byte_stream = torchac.encode_float_cdf(output_cdf, symbols, check_input_bounds=True)
         if torchac.decode_float_cdf(output_cdf, byte_stream).equal(symbols) is False:
-            raise ValueError("arithmetic codec did not work properly. Debug")       
+            raise ValueError("arithmetic codec did not work properly. Debug")   
+        else:
+            print("ok sono sopravvissuto")    
         return byte_stream, output_cdf
     
     
@@ -460,7 +514,12 @@ class  EntropyBottleneck(EntropyModel):
     
     def decompress(self, byte_stream, output_cdf):
         outputs = torchac.decode_float_cdf(output_cdf, byte_stream)
-        outputs = self.dequantize(outputs,map = self.int_to_float)
+        outputs = self.dequantize(outputs)
+        #outputs= 
+        #for i in range(self.M):            
+        #    inputs[0,i,:,:] = inputs[0,i,:,:].apply_(lambda x: self.sos.map_cdf_sos[i][x])
+        #outputs = inputs.type(torch.float)
+
         return outputs
 
     

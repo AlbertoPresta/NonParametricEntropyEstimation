@@ -90,7 +90,7 @@ def main(config):
     optimizer, aux_optimizer = configure_optimizers(net, config)
     lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min", patience = 20, factor = 0.5)
     criterion = RateDistortionLoss(lmbda=config["cfg"]["trainer"]["lambda"])
-
+    print(config["cfg"]["trainer"]["lambda"])
 
     clip_max_norm = config["cfg"]["trainer"]["clip_max_norm"]
     last_epoch = 0
@@ -152,7 +152,7 @@ def main(config):
   
         
 
-            
+        #compress_with_ac(net, test_dataloader, device,epoch)
         
         # plot sos curve 
         if epoch%10==0:
@@ -183,7 +183,7 @@ if __name__ == "__main__":
 
     ]
     
-    wandb.init(project="scale_trial", entity="albertopresta")
+    wandb.init(project="jointautoregressive_icme", entity="albertopresta")
     config = ConfigParser.from_args(args, wandb.run.name, options)
     wandb.config.update(config._config)
     main(config)

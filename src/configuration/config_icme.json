@@ -1,8 +1,8 @@
 {
 
     "arch": {
-    "model": "icme2023-hyperprior",
-    "name": "icme2023-hyperprior",
+    "model":"icme2023-hyperprior",
+    "name": "",
     "N":128,
     "M":192
         },
@@ -16,7 +16,7 @@
             "validation_split": 0.00,
             "image_size":256,
             "file_txt":"/scratch/dataset/vimeo_triplet/tri_trainlist.txt",
-            "bs":32,
+            "bs":24,
             "tbs": 1 
             },
     
@@ -33,7 +33,8 @@
         "trainer": {
             "epochs":600,
             "metric":"mse",
-            "lambda": 0.0018,
+            "lambda": 0.0009,
+            "weight": 0.0025,
             "lr":1e-4,
             "aux_lr": 1e-3,           
             "mode": "hyperprior",

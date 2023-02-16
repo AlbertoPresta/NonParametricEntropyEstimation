@@ -1,0 +1,21 @@
+{
+    "arch": {
+        "model": "icme2023-factorized",
+        "name": "icme2023-factorized",
+        "N":128,
+        "M":192
+            },
+
+        "path_models":"/scratch/pretrained_models",
+        "dataset": {
+            "name":"vimeo",
+            "train_dataset":"/scratch/dataset/vimeo_triplet/sequences",
+            "train_arod":"/scratch/dataset/JPG-AROD",
+            "test_dataset":"/scratch/dataset/kodak",
+            "image_size":256,
+            "file_txt":"/scratch/dataset/vimeo_triplet/tri_trainlist.txt"
+
+            }
+
+}
+    

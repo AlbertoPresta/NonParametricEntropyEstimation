@@ -92,11 +92,14 @@ class VimeoDatasets(Dataset):
 
             c = line.strip()
             tmp = os.path.join(self.data_dir,c)
-            d = [os.path.join(tmp,f) for f in os.listdir(tmp)]
-            self.image_path += d
+            if os.path.isdir(tmp):
+                d = [os.path.join(tmp,f) for f in os.listdir(tmp)]
+                self.image_path += d
         
         file.close()
         self.image_path = self.image_path[:30000]
+        
+        
         """
         for path, _, files in os.walk(self.data_dir):
             for name in files:
@@ -183,7 +186,7 @@ class Datasets(Dataset):
     def __getitem__(self, item):
         image_ori = self.image_path[item]
 
-        #image = cv2.imread(image_ori)
+        image = cv2.imread(image_ori)
 
         image = Image.open(image_ori).convert('RGB')
         transform = transforms.Compose([
@@ -224,7 +227,8 @@ def get_train_loader(train_data_dir, image_size, batch_size):
     return train_dataset, train_loader
 
 class TestKodakDataset(Dataset):
-    def __init__(self, data_dir):
+    def __init__(self, data_dir, names = False):
+        self.names = names
         self.data_dir = data_dir
         if not os.path.exists(data_dir):
             raise Exception(f"[!] {self.data_dir} not exitd")
@@ -238,7 +242,10 @@ class TestKodakDataset(Dataset):
             transforms.Resize((256,256)),
             transforms.ToTensor(),
         ])
-        return transform(image)
+        if self.names:
+            return transform(image), image_ori.split("/")[-1].split(".")[0]
+        else:
+            return transform(image)
 
     def __len__(self):
         return len(self.image_path)

@@ -8,19 +8,20 @@ class EntropyDistorsionLoss(nn.Module):
     Rate-distorsion loss based on hemp formulation of the entropy
     """
 
-    def __init__(self, lmbda = 1e-2, mode = "factorized"):
+    def __init__(self, lmbda = 1e-2, wgh = 0.020,mode = "factorized"):
         super().__init__()
 
         self.dist_metric = nn.MSELoss()
         self.lmbda = lmbda 
         self.type == "icme"
         self.mode = mode
+        self.wgh = wgh
 
 
 
 
 
-    def forward(self, output, target, ep = 100):
+    def forward(self, output, target,ep = 100):
 
         N, _, H, W = target.size() 
   
@@ -34,7 +35,10 @@ class EntropyDistorsionLoss(nn.Module):
         out["entropy"] =  -torch.sum(output["probability"]*(torch.log(output["probability"])/math.log(2)))*like_dim/(num_pixels)
         if self.mode == "factorized":
             out["bpp_loss"] =   sum((torch.log(likelihoods).sum() / (-math.log(2) * num_pixels)) for likelihoods in output["likelihoods"].values())   
-            out["loss"] =  self.lmbda * 255**2 * out["mse_loss"] + out["entropy"] 
+            if ep <=-1:
+                out["loss"] =  self.lmbda * 255**2 * out["mse_loss"] #  + 0.75*out["entropy"]#+ out["bpp_loss"] #+ out["entropy"] 
+            else:
+                out["loss"] =  self.lmbda * 255**2 * out["mse_loss"]   + out["entropy"]
             out["bpp_gauss"] = out["bpp_loss"]
             out["bpp_hype"] = out["bpp_loss"]
         else:
@@ -45,7 +49,8 @@ class EntropyDistorsionLoss(nn.Module):
             if ep <=-1:
                 out["loss"] =  self.lmbda * 255**2 * out["mse_loss"]  + bpp_loss_gauss
             else:
-                out["loss"] =  self.lmbda * 255**2 * out["mse_loss"]    + bpp_loss_gauss + 0.1*out["entropy"] 
+                out["loss"] =  self.lmbda * 255**2 * out["mse_loss"]    + bpp_loss_gauss  + 0.040*out["entropy"] 
+                #
             out["bpp_gauss"] = bpp_loss_gauss
             out["bpp_hype"] = bpp_loss_hype
 

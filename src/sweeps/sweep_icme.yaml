@@ -6,9 +6,6 @@ command:
     - ${args}
 method: grid
 parameters:
-  quality:
-    values: [1]
-  power: 
-    values: [1]
   lambda:
-    values: [0.013, 0.025] 
+    values: [ 0.0036, 0.025] 
+

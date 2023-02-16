@@ -139,7 +139,7 @@ def test_epoch(epoch, test_dataloader, model, criterion  ):
         for i,d in enumerate(test_dataloader):
             
             d = d.to(device)
-            out_net = model(d) # counter = 0
+            out_net = model(d, training =False) # counter = 0
             out_criterion = criterion(out_net, d)
 
             psnr.update(compute_psnr(d, out_net["x_hat"]))

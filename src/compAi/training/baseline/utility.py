@@ -138,10 +138,7 @@ def compress_with_ac(model, test_dataloader, device,epoch):
             "test":epoch,
             "test/bpp_with_ac": bpp_loss.avg,
             "test/psnr_with_ac": psnr.avg,
-            "test/mssim_with_ac":mssim.avg, 
-            "test/timing_all":timing_all.avg,
-            "test/timing_enc":timing_enc.avg,
-            "test/timing_dec":timing_dec.avg         
+            "test/mssim_with_ac":mssim.avg 
     }
     
     wandb.log(log_dict)

@@ -93,14 +93,26 @@ def bpp_calculation(out_net, out_enc):
         size = out_net['x_hat'].size() 
         num_pixels = size[0] * size[2] * size[3]
 
-        #pp = sum(len(s[0]) for s in out_enc["strings"]) * 8.0 / num_pixels
+        bpp = sum(len(s[0]) for s in out_enc["strings"]) * 8.0 / num_pixels
         #bpp_y = sum(len(s[0]) for s in out_enc["strings"]) * 8.0 / num_pixels
-        bpp_y = len(out_enc["strings"][0][0]) * 8.0 / num_pixels
-        bpp_z = len(out_enc["strings"][1][0]) * 8.0 / num_pixels
-        bpp = bpp_y + bpp_z
-        return bpp, bpp_y, bpp_z
+        #bpp_y = len(out_enc["strings"][0][0]) * 8.0 / num_pixels
+        #bpp_z = len(out_enc["strings"][1][0]) * 8.0 / num_pixels
+        #bpp = bpp_y + bpp_z
+        return bpp,bpp,bpp
  
-
+def compute_jensen_distance(net, dataloader): 
+    device = net.parameters.device()
+    net.eval()
+    with torch.no_grad():
+        for i,d in enumerate(dataloader):
+            d = d.to(device)
+            y = net.g_a(x)
+            prob = net.entropy_bottleneck._probability(y)
+            
+            #bs, ch,w,h = y.shape
+            #y = y.reshape(ch, ch*w*h)
+            #somma = torch.sum(y, dim = 1)
+            
 
 def compute_psnr(a, b):
     mse = torch.mean((a - b)**2).item()
@@ -146,14 +158,9 @@ def compress_with_ac(model, test_dataloader, device,epoch):
     log_dict = {
             "test":epoch,
             "test/bpp_with_ac": bpp_loss.avg,
-            "test/bpp_with_ac_gaussian":bpp_gauss.avg,
-            "test/bpp_with_ac_hype":bpp_hype.avg,
             "test/psnr_with_ac": psnr.avg,
-            "test/mssim_with_ac":mssim.avg,
-            
-            "test/timing_all":timing_all.avg,
-            "test/timing_enc":timing_enc.avg,
-            "test/timing_dec":timing_dec.avg   
+            "test/mssim_with_ac":mssim.avg
+        
     }
     
     wandb.log(log_dict)
@@ -185,14 +192,14 @@ def customize_quantize(x,b,delta):
     return torch.sum(torch.sign(torch.relu(1 - (2/delta)*torch.abs(x - b[None,:,None].to(x.device))))*b[None,:,None].to(x.device), dim = 1).unsqueeze(1)
 
 
-def plot_likelihood(model,dim = 0): 
+def plot_likelihood(model,dim = 0, epoch = 0): 
     extrema = model.entropy_bottleneck.extrema
     levels =model.entropy_bottleneck.levels
     delta = model.entropy_bottleneck.delta
     x_values = levels    
     data = [[x, y] for (x, y) in zip(x_values,model.entropy_bottleneck.pmf[dim,:])]
     table = wandb.Table(data=data, columns = ["x", "p_y"+ str(dim)])
-    wandb.log({"model probability dix at dimension" + str(dim): wandb.plot.scatter(table, "x", "p_y"+ str(dim), title="model probability dix at dimension" + str(dim))}) 
+    wandb.log({"model probability dix at dimension" + str(dim) + " at epoch " + str(epoch) : wandb.plot.scatter(table, "x", "p_y"+ str(dim), title="model probability dix at dimension" + str(dim))}) 
             
 
 def plot_latent_space_frequency(model, test_dataloader, device, epoch = 0,dim = 0, test = True):

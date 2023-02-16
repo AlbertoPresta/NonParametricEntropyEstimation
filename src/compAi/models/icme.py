@@ -62,7 +62,7 @@ class CompressionModel(nn.Module):
     def forward(self, *args):
         raise NotImplementedError()
 
-    def update(self,  device = torch.device("cuda"),stat_pmf = None):
+    def update(self,  device = torch.device("cpu"),stat_pmf = None):
         """Updates the entropy bottleneck(s) CDF values.
         Needs to be called once after training to be able to later perform the
         evaluation with an actual entropy coder.
@@ -247,7 +247,7 @@ class ICMEScaleHyperprior(CompressionModel):
         )
 
         self.h_a = nn.Sequential(
-            conv(M, N, stride=1, kernel_size=3),
+            conv(M, N, stride=1),
             nn.ReLU(inplace=True),
             conv(N, N),
             nn.ReLU(inplace=True),
@@ -280,6 +280,7 @@ class ICMEScaleHyperprior(CompressionModel):
             temp_res = torch.zeros((idx,2*self.extrema +1)).to(device)           
             with torch.no_grad():
                 for i,d in enumerate(dataloader):
+                    print(i)
                     if i > idx - 1:
                         break
                     d = d.to(device)
@@ -324,12 +325,14 @@ class ICMEScaleHyperprior(CompressionModel):
         }
 
     def load_state_dict(self, state_dict):
+        """
         update_registered_buffers(
             self.gaussian_conditional,
             "gaussian_conditional",
             ["_quantized_cdf", "_offset", "_cdf_length", "scale_table"],
             state_dict,
         )
+        """
         super().load_state_dict(state_dict)
 
     @classmethod
@@ -341,7 +344,7 @@ class ICMEScaleHyperprior(CompressionModel):
         net.load_state_dict(state_dict)
         return net
 
-    def update(self, scale_table=None, force=True):
+    def update(self, scale_table=None, force=True, device = torch.device("cpu")):
         if scale_table is None:
             scale_table = get_scale_table()
         updated = self.gaussian_conditional.update_scale_table(scale_table, force=force)
@@ -366,6 +369,27 @@ class ICMEScaleHyperprior(CompressionModel):
         scales_hat = self.h_s(z_hat)
         indexes = self.gaussian_conditional.build_indexes(scales_hat)
         y_hat = self.gaussian_conditional.decompress_during_training(strings[0], indexes, z_hat.dtype)
+        x_hat = self.g_s(y_hat).clamp_(0, 1)
+        return {"x_hat": x_hat}
+
+
+
+    def compress(self, x, means = None, device = torch.device("cpu")):
+        y = self.g_a(x)
+        z = self.h_a(torch.abs(y))
+        z_strings = self.entropy_bottleneck.compress(z, means = means)
+        z_hat = self.entropy_bottleneck.decompress(z_strings, z.size()[-2:])
+        scales_hat = self.h_s(z_hat)
+        indexes = self.gaussian_conditional.build_indexes(scales_hat)
+        y_strings = self.gaussian_conditional.compress(y, indexes)
+        return {"strings": [y_strings, z_strings], "shape": z.size()[-2:]}
+
+    def decompress(self, strings, shape):
+        assert isinstance(strings, list) and len(strings) == 2
+        z_hat = self.entropy_bottleneck.decompress(strings[1], shape)
+        scales_hat = self.h_s(z_hat)
+        indexes = self.gaussian_conditional.build_indexes(scales_hat)
+        y_hat = self.gaussian_conditional.decompress(strings[0], indexes, z_hat.dtype)
         x_hat = self.g_s(y_hat).clamp_(0, 1)
         return {"x_hat": x_hat}
 
@@ -402,13 +426,13 @@ class ICMEMeanScaleHyperprior(ICMEScaleHyperprior):
             conv(M * 3 // 2, M * 2, stride=1, kernel_size=3),
         )
 
-    def forward(self, x):
+    def forward(self, x, training):
         y = self.g_a(x)
         z = self.h_a(y)
-        z_hat, z_likelihoods, probability = self.entropy_bottleneck(z)
+        z_hat, z_likelihoods, probability = self.entropy_bottleneck(z, training)
         gaussian_params = self.h_s(z_hat)
         scales_hat, means_hat = gaussian_params.chunk(2, 1)
-        y_hat, y_likelihoods = self.gaussian_conditional(y, scales_hat, means=means_hat)
+        y_hat, y_likelihoods = self.gaussian_conditional(y, scales_hat, means=means_hat, training = training)
         x_hat = self.g_s(y_hat)
 
         return {
@@ -519,11 +543,10 @@ class ICMEJointAutoregressiveHierarchicalPriors(ICMEScaleHyperprior):
         params = self.h_s(z_hat)
         # check if self.training combacia 
         y_hat = self.gaussian_conditional.quantize(y,training)
-        #y_hat = self.gaussian_conditional.quantize(y, "noise" if self.training else "dequantize") # cambiare 
         ctx_params = self.context_prediction(y_hat)
         gaussian_params = self.entropy_parameters(torch.cat((params, ctx_params), dim=1))
         scales_hat, means_hat = gaussian_params.chunk(2, 1)
-        _, y_likelihoods = self.gaussian_conditional(y, scales_hat, means=means_hat)
+        _, y_likelihoods = self.gaussian_conditional(y, scales_hat, means=means_hat,  training = training)
         x_hat = self.g_s(y_hat)
 
         return {
@@ -531,6 +554,31 @@ class ICMEJointAutoregressiveHierarchicalPriors(ICMEScaleHyperprior):
             "likelihoods": {"y": y_likelihoods, "z": z_likelihoods},
             "probability": probability
         }
+
+    def define_statistical_pmf(self, dataloader, device =torch.device("cuda"),  idx = 100):
+        res = torch.zeros((self.N,2*self.extrema +1)).to(device)     
+        start = time.time() 
+        cc = 0         
+        with torch.no_grad():
+            for i,d in enumerate(dataloader):
+                if i > idx - 1:
+                    break
+                cc += 1
+                d = d.to(device)
+                y = self.g_a(d) 
+                out_enc= self.h_a(y)
+                bs, ch, w,h = out_enc.shape
+                
+                out_enc = out_enc.round().int() #these dshould be the latent space
+                out_enc = out_enc.reshape(ch,bs,w*h)
+                prob = self.entropy_bottleneck._probability(out_enc)
+                res  += prob 
+        res = res/cc
+        self.entropy_bottleneck.stat_pmf = res 
+        self.entropy_bottleneck.pmf = res
+        return res
+
+
 
     @classmethod
     def from_state_dict(cls, state_dict):
@@ -791,7 +839,7 @@ class ICMECheng2020Attention(ICMECheng2020Anchor):
         N (int): Number of channels
     """
 
-    def __init__(self, N=192, **kwargs):
+    def __init__(self,N=192,  **kwargs):
         super().__init__(N=N, **kwargs)
 
         self.g_a = nn.Sequential(
