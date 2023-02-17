@@ -295,6 +295,11 @@ def plot_frame_compression_results(frames, bpp_fact, psnr_fact,bpp_base, psnr_ba
     plt.close()
     
 
+def adapt_entropy_model(net):
+    return net
+
+
+
 
 def reshape_image(x): 
     h, w = x.size(2), x.size(3)
@@ -409,6 +414,9 @@ def main():
                             out_dec = net.decompress(out_enc["strings"], out_enc["shape"])   
                             psnr_val = compute_psnr(d, out_dec["x_hat"]) 
                             bpp= bpp_calculation(out_dec, out_enc)
+
+                            if momentum == "momentum":
+                                adapt_entropy_model(net) # da definire 
                             #print(bpp)                                            
                         else:                          
                             if "joint" or "cheng" in type_mode:                                

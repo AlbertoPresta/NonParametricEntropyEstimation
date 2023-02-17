@@ -21,6 +21,7 @@ from compAi.training.icme.utility import plot_likelihood, CustomDataParallel, co
 from compAi.models.icme import FactorizedICME, ICMEScaleHyperprior, ICMEMeanScaleHyperprior, ICMEJointAutoregressiveHierarchicalPriors
 from compAi.utils.parser import parse_args, ConfigParser
 import collections
+import math
 
 
 model_architectures= {
@@ -156,8 +157,7 @@ def compute_and_plot_latentspace_channels(net,type, dataloader = None, test = Fa
                         prob = net.entropy_bottleneck._probability(outputs)
 
                         res += prob  
-                    else: break
-                    
+                    else: break                    
                 res = res/cc  #questa è la distribuzione  del test set
                 x_values = net.entropy_bottleneck.levels
                 for j in range(2):
@@ -178,8 +178,7 @@ def compute_and_plot_latentspace_channels(net,type, dataloader = None, test = Fa
             table = wandb.Table(data=data, columns = ["x", "p_y"])
             wandb.log({'likelihood function at dimension ' + str(i): wandb.plot.scatter(table, "x", "p_y" , title='likelihood function at dimension ' + str(i))})        
         
-                    
-                        
+                                           
 def main(config):
     
     path_models = config["path_models"]#"/scratch/pretrained_models"

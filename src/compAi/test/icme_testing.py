@@ -104,11 +104,15 @@ def plot_total_diagram(pth,
     plt.close()     
     print("ma arrivo qua ")
 
-def bpp_calculation(out_net, out_enc, icme = False):
+def bpp_calculation(out_net, out_enc, cmp = True):
         size = out_net['x_hat'].size() 
         num_pixels = size[0] * size[2] * size[3]
-
-        bpp = sum(len(s[0]) for s in out_enc["strings"]) * 8.0 / num_pixels
+        if cmp:
+            bpp = sum(len(s[0]) for s in out_enc["strings"]) * 8.0 / num_pixels
+        else: 
+            bpp_loss_hype = sum((torch.log(likelihoods).sum() / (-math.log(2) * num_pixels)) for likelihoods in out_net["likelihoods"]["z"])   
+            bpp_loss_gauss = sum((torch.log(likelihoods).sum() / (-math.log(2) * num_pixels)) for likelihoods in out_net["likelihoods"]["y"]) 
+            bpp =  bpp_loss_hype + bpp_loss_gauss
         return bpp
 
 
@@ -263,16 +267,17 @@ def inference_with_arithmetic_codec(model, test_dataloader, device,  type_model)
                 out_dec = model.decompress(out_enc["strings"], out_enc["shape"])
                 timing_dec.update(time.time() - start)
                 timing_all.update(time.time() - start_all)
-            else:
-                out_enc  = model.compress_during_training(d, device = device) # bit_stream is the compressed, output_cdf needs for decoding 
-                enc_comp = time.time() - start_all
-                timing_enc.update(enc_comp)
-                start = time.time()  
+                bpp = bpp_calculation(out_dec, out_enc, cmp = True)
+            if "factorized" in type_model:
+                out_enc  = model.compress_during_training(d, device = device) # bit_stream is the compressed, output_cdf needs for decoding  
                 out_dec = model.decompress_during_training(out_enc["strings"], out_enc["shape"])
-                timing_dec.update(time.time() - start)
-                timing_all.update(time.time() - start_all)               
 
-            bpp= bpp_calculation(out_dec, out_enc, icme = True)
+                bpp = bpp_calculation(out_dec, out_enc, cmp = True)
+            else:
+                out_dec  = model(d) 
+                bpp = bpp_calculation(out_dec, out_enc, cmp = False)       
+
+            bpp= bpp_calculation(out_dec, out_enc)
             bpp_loss.update(bpp)
             psnr.update(compute_psnr(d, out_dec["x_hat"]))
             mssim.update(compute_msssim(d, out_dec["x_hat"]))  
@@ -287,21 +292,16 @@ def inference_with_arithmetic_codec(model, test_dataloader, device,  type_model)
             lista_js = []
             for j in range(192):
                 # extract the true probability           
-                    a,b = torch.unique(y[j],return_counts=True)
-                    a = a.int()
-                    somma = torch.sum(b).item()
-                    b = (b/somma)
-                
-
-                    data_dic = create_dictionary(a,b)
-
-                
-                    pmf = probability[j]
-                    l = int(pmf.shape[0]/2)
-                    pmf_dic = dict(zip(np.arange(-l,l + 1),list(pmf.numpy())))
-                
-                    r =  compute_prob_distance(data_dic,pmf_dic,j)
-                    lista_js.append(r)
+                a,b = torch.unique(y[j],return_counts=True)
+                a = a.int()
+                somma = torch.sum(b).item()
+                b = (b/somma)
+                data_dic = create_dictionary(a,b)
+                pmf = probability[j]
+                l = int(pmf.shape[0]/2)
+                pmf_dic = dict(zip(np.arange(-l,l + 1),list(pmf.numpy())))        
+                r =  compute_prob_distance(data_dic,pmf_dic,j)
+                lista_js.append(r)
             js_distance.update(np.mean(np.array(lista_js))) 
                 
     return bpp_loss.avg, psnr.avg, mssim.avg, js_distance.avg 
@@ -636,7 +636,6 @@ def load_pretrained_baseline(architecture, path,device = torch.device("cpu")):
 
 def from_state_dict(arch, state_dict):
     """Return a new model instance from `state_dict`."""
-
     N = state_dict["g_a.0.weight"].size(0)
     M = state_dict["g_a.6.weight"].size(0)
     if "icme" in arch:
@@ -647,16 +646,9 @@ def from_state_dict(arch, state_dict):
     return net
 
 def load_model(path_models, name_model, type_mode, device = torch.device("cpu")):
-
-    if "icme" in name_model:
-        complete_path = join(path_models,name_model + ".pth.tar")
-        net = load_pretrained_baseline(type_mode, complete_path, device  = device)
-        net.update(device = device)
-    else: # use only baseline
-        
-        complete_path = join(path_models,name_model + ".pth.tar")
-        net = load_pretrained_baseline(type_mode, complete_path, device  = device)    
-        net.update()  
+    complete_path = join(path_models,name_model + ".pth.tar")
+    net = load_pretrained_baseline(type_mode, complete_path, device  = device)
+    net.update()  
     return net
 
 def plot_diagram_and_images(models_path, 

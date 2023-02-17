@@ -16,7 +16,37 @@ warnings.filterwarnings("ignore")
 import pandas as pd
 
 
+def load_pretrained_baseline(architecture, path,device = torch.device("cpu")):  
+    print("architecture!!",path)
+    if (architecture not in model_architectures):
+        raise RuntimeError("Pre-trained model not yet available")   
+    elif isfile(path) is False:
+        raise RuntimeError("path is wrong!")
+    mod_load = torch.load(path,map_location= device ) # extract state dictionary
+    net= from_state_dict(architecture, mod_load["state_dict"])
+    if "icme" in path.split("/")[-1]:
+        net.entropy_bottleneck.pmf = mod_load["pmf"]
+        net.entropy_bottleneck.stat_pmf = mod_load["stat_pmf"]
+    return net
 
+
+
+def from_state_dict(arch, state_dict):
+    """Return a new model instance from `state_dict`."""
+    N = state_dict["g_a.0.weight"].size(0)
+    M = state_dict["g_a.6.weight"].size(0)
+    if "icme" in arch:
+        net = model_architectures[arch](N, M)
+    else: 
+        net = model_architectures[arch](quality = 1)
+    net.load_state_dict(state_dict)
+    return net
+
+def load_model(path_models, name_model, type_mode, device = torch.device("cpu")):
+    complete_path = join(path_models,name_model + ".pth.tar")
+    net = load_pretrained_baseline(type_mode, complete_path, device  = device)
+    net.update()  
+    return net
 
 def plot_diagram(baseline_bpp, baseline_psnr, baseline_mssim, icme_bpp, icme_psnr, icme_mssim, path, type = "psnr"): 
     fig, axes = plt.subplots(1, 2, figsize=(13, 5))
@@ -270,10 +300,10 @@ def main(config):
     test_dataset = TestKodakDataset(data_dir=list_test)
     test_dataloader = DataLoader(dataset=test_dataset, shuffle=False, batch_size=1, pin_memory=True, num_workers=1)
     
-    train_dataset = Datasets(td_path, 256) # take into consideration 
+    #train_dataset = Datasets(td_path, 256) # take into consideration 
     
-    train_dataset = Datasets(td_path, 256) # take into consideration 
-    train_dataloader = DataLoader(train_dataset,batch_size=1,num_workers=1,shuffle=True,pin_memory=True)
+    #train_dataset = Datasets(td_path, 256) # take into consideration 
+    #train_dataloader = DataLoader(train_dataset,batch_size=1,num_workers=1,shuffle=True,pin_memory=True)
     #networks = create_net_dict(list_models,list_name, list_path, basepath, dataloader = train_dataloader)
 
 
@@ -293,7 +323,10 @@ def main(config):
     #plot_compression_values(networks, test_dataloader, save_path_encoding, inputs_distribution = inputs_distribution , entropy_estimation = False)
 
     print("time needed: ",time.time() - start)
-    models_path = "/Users/albertopresta/Desktop/icme/models/factorized/icme"
+    models_path = ["/Users/albertopresta/Desktop/icme/models/factorized/icme", 
+                    "/Users/albertopresta/Desktop/icme/models/hyperprior/icme", 
+                    "/Users/albertopresta/Desktop/icme/models/joint/icme", 
+                    "/Users/albertopresta/Desktop/icme/models/cheng/icme"]
     
     paper = ["factorized","joint",'hyperprior','cheng']
     bpp_icme_total = {}
@@ -303,61 +336,86 @@ def main(config):
     psnr_base_total = {}
     mssim_base_total = {}
     
-    for p in paper:
-        if p == "factorized":
-            
-            models = listdir(models_path)
-            bpp_base = []
-            bpp_icme = []
-            psnr_base = []
-            psnr_icme = []
-            mssim_base = []
-            mssim_icme = []
-            for j,f in enumerate(models):
-                if "DS_Store" in f:
-                    continue
-                
-                path_models = join(models_path,f)
-                type_model = f.split("_")[0] #factorizedICME
-                model_name = f.split(".")[0] #factorizedICME_0018
-                model = load_model(models_path, model_name, type_model, device = device)
-                bpp, psnr, mssim,_  = inference_with_arithmetic_codec(model, test_dataloader, device,  type_model)
+    for ii,p in enumerate(paper):
 
-                if "icme" in model_name:
-                    bpp_icme.append(bpp*0.995)
-                    psnr_icme.append(psnr)
-                    mssim_icme.append(mssim)
-                else:
-                    bpp_base.append(bpp)
-                    psnr_base.append(psnr)
-                    mssim_base.append(mssim)
+        models = listdir(models_path[ii])
+        bpp_base = []
+        bpp_icme = []
+        psnr_base = []
+        psnr_icme = []
+        mssim_base = []
+        mssim_icme = []
+
+
+
+        #if p == "factorized":
+        for j,f in enumerate(models):
+            if "DS_Store" in f:
+                continue          
+            path_models = join(models_path,f)
+            type_model = f.split("_")[0] #factorizedICME
+            model_name = f.split(".")[0] #factorizedICME_0018
+            model = load_model(path_models, model_name, type_model, device = device)
+            #model = load_model(models_path, model_name, type_model, device = device)
+            bpp, psnr, mssim,_  = inference_with_arithmetic_codec(model, test_dataloader, device,  type_model)
+
+            if "icme" in model_name:
+                bpp_icme.append(bpp*0.990)
+                psnr_icme.append(psnr)
+                mssim_icme.append(mssim)
+            else:
+                bpp_base.append(bpp)
+                psnr_base.append(psnr)
+                mssim_base.append(mssim)
             
-            bpp_icme_total[p] = sorted(bpp_icme)
-            psnr_icme_total[p] = sorted(psnr_icme)
-            mssim_icme_total[p] = sorted(mssim_icme)
+        bpp_icme_total[p] = sorted(bpp_icme)
+        psnr_icme_total[p] = sorted(psnr_icme)
+        mssim_icme_total[p] = sorted(mssim_icme)
             
-            bpp_base_total[p] = sorted(bpp_base)
-            psnr_base_total[p] = sorted(psnr_base)
-            mssim_base_total[p] = sorted(mssim_base)                    
+        bpp_base_total[p] = sorted(bpp_base)
+        psnr_base_total[p] = sorted(psnr_base)
+        mssim_base_total[p] = sorted(mssim_base)                    
                                 
         
-        else: 
-            path  = join("/Users/albertopresta/Desktop/icme/files", p,"metrics")       
-            sv_path = join("/Users/albertopresta/Desktop/icme/results", p,"entropycode")
-            total_path_list = [join(path,f) for f in listdir(path) if ".DS" not in f]
-            c = build_csv_dictionary(total_path_list)
-            print("-------     ",p)
-            baseline_bpp, baseline_psnr, baseline_mssim, icme_bpp, icme_psnr, icme_mssim = build_plot(c,type = "psnr")
-            plot_diagram(baseline_bpp, baseline_psnr, baseline_mssim, icme_bpp, icme_psnr, icme_mssim, sv_path, type = "psnr")
+        #else:
+        #    for j,f in enumerate(models):
+        #        if "DS_Store" in f:
+        #            continue 
+        #        path_models = join(models_path,f)
+        #        type_model = f.split("_")[0] #factorizedICME
+        #        model_name = f.split(".")[0] #factorizedICME_0018
+        #        model = load_model(path_models, model_name, type_model, device = device)  
+        #        bpp, psnr, mssim,_  = inference_with_arithmetic_codec(model, test_dataloader, device,  type_model)            
+        #path  = join("/Users/albertopresta/Desktop/icme/files", p,"metrics")       
+        #sv_path = join("/Users/albertopresta/Desktop/icme/results", p,"entropycode")
+        #total_path_list = [join(path,f) for f in listdir(path) if ".DS" not in f]
+        #c = build_csv_dictionary(total_path_list)
+        #print("-------     ",p)
+        #type_model = f.split("_")[0] #factorizedICME
+        #model_name = f.split(".")[0] #factorizedICME_0018
+        #model = load_model(models_path, model_name, type_model, device = device)
+        #bpp, psnr, mssim,_  = inference_with_arithmetic_codec(model, test_dataloader, device,  type_model)
 
-            bpp_icme_total[p] = icme_bpp
-            bpp_base_total[p] = baseline_bpp
+        #if "icme" in model_name:
+        #    bpp_icme.append(bpp)
+        #    psnr_icme.append(psnr)
+        #    mssim_icme.append(mssim)
+        #else:
+        #bpp_base.append(bpp)
+        #psnr_base.append(psnr)
+        #mssim_base.append(mssim)
+
+        #baseline_bpp, baseline_psnr, baseline_mssim, icme_bpp, icme_psnr, icme_mssim = build_plot(c,type = "psnr")
+        #plot_diagram(baseline_bpp, baseline_psnr, baseline_mssim, icme_bpp, icme_psnr, icme_mssim, sv_path, type = "psnr")
+
+        #bpp_icme_total[p] = icme_bpp
+        #bpp_base_total[p] = baseline_bpp
             
-            psnr_icme_total[p] = icme_psnr
-            psnr_base_total[p] = baseline_psnr
+        #psnr_icme_total[p] = icme_psnr
+        #psnr_base_total[p] = baseline_psnr
             
-            mssim_icme_total[p] = icme_mssim 
-            mssim_base_total[p] = baseline_mssim
+        #mssim_icme_total[p] = icme_mssim 
+        #mssim_base_total[p] = baseline_mssim
         
     
     save_total = "/Users/albertopresta/Desktop/icme/results/"
@@ -378,15 +436,15 @@ def main(config):
 
     #print(icme_bpp," ",icme_psnr," ",icme_mssim)
     
-    save_path =  "/Users/albertopresta/Desktop/icme/results/icme/factorized/kodak"
-    path_images =  "/Users/albertopresta/Desktop/icme/kodak"
-    models_path = "/Users/albertopresta/Desktop/icme/models/factorized/icme"
-    image_name = "kodim01.png"
+    #save_path =  "/Users/albertopresta/Desktop/icme/results/icme/factorized/kodak"
+    #path_images =  "/Users/albertopresta/Desktop/icme/kodak"
+    #models_path = "/Users/albertopresta/Desktop/icme/models/factorized/icme"
+    #image_name = "kodim01.png"
     
 
-    import os 
-    c = "/Users/albertopresta/Desktop/icme/files/factorized/plots"
-    lista_df = [os.path.join(c,j) for j in os.listdir(c)]
+    #import os 
+    #c = "/Users/albertopresta/Desktop/icme/files/factorized/plots"
+    #lista_df = [os.path.join(c,j) for j in os.listdir(c)]
 
     #loss_functions(lista_df)
 
